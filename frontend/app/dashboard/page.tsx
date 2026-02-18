@@ -2,10 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect, useReadContract, useSendCalls } from 'wagmi';
 import { useApi } from '@/lib/hooks/useApi';
-import { formatUnits } from 'viem';
-import { getTokenSymbol, ENS_DOMAIN } from '@/lib/contracts';
+import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
+import { getTokenSymbol, ENS_DOMAIN, USDC_ADDRESS, TOKENS, ERC20_ABI } from '@/lib/contracts';
 
 function DashboardContent() {
   const router = useRouter();
@@ -21,6 +21,21 @@ function DashboardContent() {
   const [claimInput, setClaimInput] = useState('');
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const [sendingTo, setSendingTo] = useState<string | null>(null);
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  // Read USDC balance
+  const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  // Send USDC via JAW (EIP-5792)
+  const { sendCalls, isPending: isSending } = useSendCalls();
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -61,6 +76,35 @@ function DashboardContent() {
     init();
   }, [api, router, isConnected, address]);
 
+  const handleSendUSDC = (recipientAddress: string) => {
+    setSendError(null);
+    const amount = parseFloat(sendAmount);
+    if (!amount || amount <= 0) {
+      setSendError('Enter a valid amount');
+      return;
+    }
+    const amountInUnits = parseUnits(sendAmount, TOKENS.USDC.decimals);
+    sendCalls({
+      calls: [{
+        to: USDC_ADDRESS,
+        data: encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'transfer',
+          args: [recipientAddress as `0x${string}`, amountInUnits],
+        }),
+      }],
+    }, {
+      onSuccess: () => {
+        setSendingTo(null);
+        setSendAmount('');
+        refetchBalance();
+      },
+      onError: (err) => {
+        setSendError(err.message || 'Transfer failed');
+      },
+    });
+  };
+
   const handleClaimUsername = async () => {
     if (!address || !claimInput || claimInput.length < 3) {
       setClaimError('Username must be at least 3 characters');
@@ -97,9 +141,16 @@ function DashboardContent() {
             <h1 className="text-2xl font-bold text-gray-900">JAW Games</h1>
             <p className="text-sm text-gray-600">{username}.{ENS_DOMAIN}</p>
           </div>
-          <button onClick={handleSignOut} className="text-sm text-gray-600 hover:text-gray-900">
-            Sign Out
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-lg font-bold text-gray-900">
+                {usdcBalance !== undefined ? Number(formatUnits(usdcBalance as bigint, TOKENS.USDC.decimals)).toFixed(2) : '...'} USDC
+              </p>
+            </div>
+            <button onClick={handleSignOut} className="text-sm text-gray-600 hover:text-gray-900">
+              Sign Out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -183,20 +234,52 @@ function DashboardContent() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {players.map((player) => (
-                <div
-                  key={player.id}
-                  className="bg-white rounded-lg shadow p-4 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="font-semibold text-gray-900">{player.username}</p>
-                    <p className="text-xs text-gray-500">{player.ensName}</p>
+                <div key={player.id} className="bg-white rounded-lg shadow p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-900">{player.username}</p>
+                      <p className="text-xs text-gray-500">{player.ensName}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setSendingTo(sendingTo === player.id ? null : player.id); setSendAmount(''); setSendError(null); }}
+                        className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition"
+                      >
+                        Send
+                      </button>
+                      <button
+                        onClick={() => router.push(`/create-match?opponent=${player.username}`)}
+                        className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+                      >
+                        Challenge
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => router.push(`/create-match?opponent=${player.username}`)}
-                    className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
-                  >
-                    Challenge
-                  </button>
+                  {sendingTo === player.id && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={sendAmount}
+                          onChange={(e) => setSendAmount(e.target.value)}
+                          placeholder="Amount USDC"
+                          step="0.01"
+                          min="0"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={() => handleSendUSDC(player.smartAccountAddress)}
+                          disabled={isSending || !sendAmount}
+                          className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-50"
+                        >
+                          {isSending ? 'Sending...' : 'Confirm'}
+                        </button>
+                      </div>
+                      {sendError && (
+                        <p className="text-xs text-red-600 mt-1">{sendError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
