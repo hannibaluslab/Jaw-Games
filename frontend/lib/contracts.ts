@@ -1,7 +1,7 @@
 import { Address } from 'viem';
 
-export const ESCROW_CONTRACT_ADDRESS = process.env
-  .NEXT_PUBLIC_ESCROW_CONTRACT_ADDRESS as Address;
+export const ESCROW_CONTRACT_ADDRESS = (process.env
+  .NEXT_PUBLIC_ESCROW_CONTRACT_ADDRESS?.trim()) as Address;
 
 export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ||
   '0x036CbD53842c5426634e7929541eC2318f3dCF7e') as Address;
