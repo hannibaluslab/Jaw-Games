@@ -60,7 +60,7 @@ export default function MatchDetailsPage() {
       }],
     }, {
       onSuccess: (result) => {
-        api.confirmMatchAccepted(matchId, result).then(() => {
+        api.confirmMatchAccepted(matchId, result.id).then(() => {
           setAction('idle');
           fetchMatch();
         });
@@ -97,7 +97,7 @@ export default function MatchDetailsPage() {
       ],
     }, {
       onSuccess: (result) => {
-        api.confirmDeposit(matchId, address!, result).then(() => {
+        api.confirmDeposit(matchId, address!, result.id).then(() => {
           setAction('idle');
           fetchMatch();
         });

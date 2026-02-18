@@ -82,7 +82,7 @@ function CreateMatchContent() {
         onSuccess: (result) => {
           setStep('done');
           // Notify backend and navigate
-          api.confirmMatchCreated(data.matchId, result).then(() => {
+          api.confirmMatchCreated(data.matchId, result.id).then(() => {
             router.push(`/matches/${encodeURIComponent(data.matchId)}`);
           });
         },
