@@ -18,7 +18,7 @@ contract MatchEscrow is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Constants
-    uint256 public constant MIN_STAKE = 3_000_000; // 3 USD in 6 decimal tokens
+    uint256 public constant MIN_STAKE = 1_000_000; // 1 USD in 6 decimal tokens
     uint256 public constant MAX_FEE_BPS = 3000; // 30%
 
     // State variables
