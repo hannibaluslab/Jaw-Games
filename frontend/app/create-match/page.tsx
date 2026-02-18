@@ -7,7 +7,7 @@ import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
 
-type Step = 'form' | 'api' | 'blockchain' | 'done';
+type Step = 'form' | 'signing' | 'saving' | 'done';
 
 function CreateMatchContent() {
   const router = useRouter();
@@ -16,98 +16,116 @@ function CreateMatchContent() {
   const { address, isConnected } = useAccount();
 
   const [opponentUsername, setOpponentUsername] = useState('');
+  const [opponentAddress, setOpponentAddress] = useState<string | null>(null);
   const [stakeAmount, setStakeAmount] = useState('3');
   const [token, setToken] = useState<'USDC' | 'USDT'>('USDC');
   const [step, setStep] = useState<Step>('form');
   const [error, setError] = useState<string | null>(null);
+  const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
 
   const { sendCalls, isPending: isTxPending } = useSendCalls();
 
+  // Load players list to resolve opponent address client-side
   useEffect(() => {
-    if (!isConnected) router.push('/auth');
-  }, [isConnected, router]);
-
-  const handleCreateMatch = async () => {
-    if (!opponentUsername || !stakeAmount || !address) return;
-
-    try {
-      setError(null);
-      setStep('api');
-
-      const tokenInfo = TOKENS[token];
-
-      // Step 1: Create match in backend
-      const response = await api.createMatch({
-        gameId: 'tictactoe',
-        opponentUsername,
-        stakeAmount: parseUnits(stakeAmount, tokenInfo.decimals).toString(),
-        token: tokenInfo.address,
-      });
-
-      if (response.error) {
-        setError(response.error);
-        setStep('form');
-        return;
-      }
-
-      const data = response.data!;
-      setStep('blockchain');
-
-      // Step 2: Call escrow contract via sendCalls (EIP-5792, uses USDC paymaster)
-      const gameIdHash = keccak256(toHex('tictactoe'));
-      const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
-      const acceptBy = BigInt(Math.floor(new Date(data.deadlines.acceptBy).getTime() / 1000));
-      const depositBy = BigInt(Math.floor(new Date(data.deadlines.depositBy).getTime() / 1000));
-      const settleBy = BigInt(Math.floor(new Date(data.deadlines.settleBy).getTime() / 1000));
-
-      sendCalls({
-        calls: [{
-          to: ESCROW_CONTRACT_ADDRESS,
-          data: encodeFunctionData({
-            abi: ESCROW_ABI,
-            functionName: 'createMatch',
-            args: [
-              data.matchId as `0x${string}`,
-              gameIdHash,
-              data.opponentAddress as `0x${string}`,
-              stakeAmountParsed,
-              tokenInfo.address,
-              acceptBy,
-              depositBy,
-              settleBy,
-            ],
-          }),
-        }],
-      }, {
-        onSuccess: (result) => {
-          setStep('done');
-          // Notify backend and navigate
-          api.confirmMatchCreated(data.matchId, result.id).then(() => {
-            router.push(`/matches/${encodeURIComponent(data.matchId)}`);
-          });
-        },
-        onError: (err) => {
-          setError(err.message || 'Transaction failed');
-          setStep('form');
-        },
-      });
-    } catch (err: any) {
-      console.error('Create match error:', err);
-      setError(err.message || 'Failed to create match');
-      setStep('form');
+    if (!isConnected) {
+      router.push('/auth');
+      return;
     }
+    api.listPlayers().then((res) => {
+      if (res.data?.players) {
+        setPlayers(res.data.players);
+      }
+    });
+  }, [isConnected, router, api]);
+
+  // Pre-fill opponent from query param
+  useEffect(() => {
+    const opponent = searchParams.get('opponent');
+    if (opponent) {
+      setOpponentUsername(opponent);
+    }
+  }, [searchParams]);
+
+  // Resolve opponent address when username changes
+  useEffect(() => {
+    const player = players.find((p) => p.username === opponentUsername);
+    setOpponentAddress(player?.smartAccountAddress || null);
+  }, [opponentUsername, players]);
+
+  const handleCreateMatch = () => {
+    if (!opponentUsername || !stakeAmount || !address || !opponentAddress) return;
+
+    setError(null);
+    setStep('signing');
+
+    const tokenInfo = TOKENS[token];
+    const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
+
+    // Generate matchId and deadlines client-side (no async gap before sendCalls)
+    const matchId = keccak256(toHex(`match-${crypto.randomUUID()}-${Date.now()}`));
+    const gameIdHash = keccak256(toHex('tictactoe'));
+    const now = Math.floor(Date.now() / 1000);
+    const acceptBy = BigInt(now + 86400);
+    const depositBy = BigInt(now + 86400 + 3600);
+    const settleBy = BigInt(now + 86400 + 3600 + 7200);
+
+    // Call sendCalls immediately — no await before this (fixes mobile popup blocker)
+    sendCalls({
+      calls: [{
+        to: ESCROW_CONTRACT_ADDRESS,
+        data: encodeFunctionData({
+          abi: ESCROW_ABI,
+          functionName: 'createMatch',
+          args: [
+            matchId,
+            gameIdHash,
+            opponentAddress as `0x${string}`,
+            stakeAmountParsed,
+            tokenInfo.address,
+            acceptBy,
+            depositBy,
+            settleBy,
+          ],
+        }),
+      }],
+    }, {
+      onSuccess: async (result) => {
+        setStep('saving');
+        // Save match to backend after tx succeeds
+        const response = await api.createMatch({
+          gameId: 'tictactoe',
+          opponentUsername,
+          stakeAmount: stakeAmountParsed.toString(),
+          token: tokenInfo.address,
+          matchId,
+          txHash: result.id,
+        });
+        if (response.error) {
+          setError(response.error);
+          setStep('form');
+          return;
+        }
+        setStep('done');
+        router.push(`/matches/${encodeURIComponent(matchId)}`);
+      },
+      onError: (err) => {
+        setError(err.message || 'Transaction failed');
+        setStep('form');
+      },
+    });
   };
 
   const getStepMessage = () => {
     switch (step) {
-      case 'api': return 'Creating match...';
-      case 'blockchain': return isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...';
+      case 'signing': return isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...';
+      case 'saving': return 'Saving match...';
       case 'done': return 'Match created! Redirecting...';
       default: return '';
     }
   };
 
   const isProcessing = step !== 'form';
+  const opponentValid = !!opponentAddress;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -146,7 +164,13 @@ function CreateMatchContent() {
                 disabled={isProcessing}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
               />
-              <p className="mt-1 text-sm text-gray-500">Enter their username without .{ENS_DOMAIN}</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {opponentUsername && !opponentValid ? (
+                  <span className="text-red-500">Player not found</span>
+                ) : (
+                  <>Enter their username without .{ENS_DOMAIN}</>
+                )}
+              </p>
             </div>
 
             <div>
@@ -156,7 +180,7 @@ function CreateMatchContent() {
                   type="number"
                   value={stakeAmount}
                   onChange={(e) => setStakeAmount(e.target.value)}
-                  min="1"
+                  min={MIN_STAKE}
                   step="1"
                   disabled={isProcessing}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
@@ -230,7 +254,7 @@ function CreateMatchContent() {
 
             <button
               onClick={handleCreateMatch}
-              disabled={isProcessing || !opponentUsername || Number(stakeAmount) < MIN_STAKE}
+              disabled={isProcessing || !opponentValid || Number(stakeAmount) < MIN_STAKE}
               className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? getStepMessage() : 'Create Match & Send Invite'}
@@ -239,7 +263,7 @@ function CreateMatchContent() {
             {isProcessing && (
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded text-sm">
                 <p className="font-semibold">{getStepMessage()}</p>
-                {step === 'blockchain' && (
+                {step === 'signing' && (
                   <p className="mt-1">Please approve the transaction in your wallet to create the match on-chain.</p>
                 )}
               </div>

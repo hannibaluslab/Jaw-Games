@@ -106,6 +106,8 @@ export class ApiClient {
     opponentUsername: string;
     stakeAmount: string;
     token: string;
+    matchId?: string;
+    txHash?: string;
   }): Promise<ApiResponse<{ matchId: string; opponentAddress: string; opponentUsername: string; deadlines: { acceptBy: string; depositBy: string; settleBy: string } }>> {
     return this.post('/api/matches', data);
   }

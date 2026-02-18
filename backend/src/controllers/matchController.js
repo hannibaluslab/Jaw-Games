@@ -13,7 +13,7 @@ class MatchController {
    */
   static async createMatch(req, res) {
     try {
-      const { gameId, opponentUsername, stakeAmount, token } = req.body;
+      const { gameId, opponentUsername, stakeAmount, token, matchId: clientMatchId, txHash } = req.body;
       const { userId } = req.user; // From auth middleware
 
       // Validate inputs
@@ -34,8 +34,8 @@ class MatchController {
       }
       const opponentAddress = playerB.smart_account_address;
 
-      // Generate unique matchId
-      const matchId = ethers.id(`match-${crypto.randomUUID()}-${Date.now()}`);
+      // Use client-provided matchId if available (tx-first flow), otherwise generate
+      const matchId = clientMatchId || ethers.id(`match-${crypto.randomUUID()}-${Date.now()}`);
 
       // Calculate deadlines
       const now = Math.floor(Date.now() / 1000);
@@ -56,6 +56,11 @@ class MatchController {
         settleBy,
       });
 
+      // If tx already confirmed (tx-first flow from mobile), mark as created
+      if (txHash) {
+        await Match.updateStatus(matchId, 'created');
+      }
+
       res.status(201).json({
         matchId,
         opponentAddress,
@@ -65,7 +70,7 @@ class MatchController {
           depositBy,
           settleBy,
         },
-        message: 'Match created. Call createMatch on escrow contract.',
+        message: 'Match created.',
       });
     } catch (error) {
       console.error('Create match error:', error);
