@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import { useDisconnect } from 'wagmi';
+import { useAccount, useDisconnect } from 'wagmi';
 import { useApi } from '@/lib/hooks/useApi';
 import { formatUnits } from 'viem';
 import { getTokenSymbol, ENS_DOMAIN } from '@/lib/contracts';
@@ -10,6 +10,7 @@ import { getTokenSymbol, ENS_DOMAIN } from '@/lib/contracts';
 function DashboardContent() {
   const router = useRouter();
   const api = useApi();
+  const { isConnected, address } = useAccount();
   const { disconnect } = useDisconnect();
 
   const [username, setUsername] = useState<string | null>(null);
@@ -18,11 +19,13 @@ function DashboardContent() {
   const [matchesLoading, setMatchesLoading] = useState(true);
 
   useEffect(() => {
-    const storedUsername = localStorage.getItem('username');
-    if (!storedUsername) {
+    if (!isConnected || !address) {
       router.push('/auth');
       return;
     }
+
+    // Use stored username or derive from address
+    const storedUsername = localStorage.getItem('username') || address.slice(0, 8);
     setUsername(storedUsername);
 
     // Fetch invites and matches
@@ -42,7 +45,7 @@ function DashboardContent() {
     };
 
     fetchData();
-  }, [api, router]);
+  }, [api, router, isConnected, address]);
 
   const handleSignOut = () => {
     localStorage.clear();
