@@ -26,7 +26,7 @@ export const TOKENS = {
 
 export const PLATFORM_FEE = 0.2;
 export const WINNER_SHARE = 1 - PLATFORM_FEE;
-export const MIN_STAKE = 1;
+export const MIN_STAKE = 3;
 export const ENS_DOMAIN = 'lafung.eth';
 export const BLOCK_EXPLORER_URL = 'https://sepolia.basescan.org';
 
