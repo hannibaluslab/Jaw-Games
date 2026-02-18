@@ -46,6 +46,12 @@ function DashboardContent() {
       const resolvedUsername = userRes.data?.username || address.slice(0, 8);
       setUsername(resolvedUsername);
 
+      // Store user ID for auth on protected endpoints
+      if (userRes.data?.id) {
+        localStorage.setItem('userId', userRes.data.id);
+        api.setAuthToken(userRes.data.id);
+      }
+
       // Fetch invites, matches, and players in parallel
       const [invitesRes, matchesRes, playersRes] = await Promise.all([
         api.getPendingInvites(resolvedUsername),
