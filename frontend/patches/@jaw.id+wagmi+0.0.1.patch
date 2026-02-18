@@ -1,5 +1,5 @@
 diff --git a/node_modules/@jaw.id/wagmi/dist/lib/Connector.js b/node_modules/@jaw.id/wagmi/dist/lib/Connector.js
-index 6714813..de1fc08 100644
+index 6714813..69c24d7 100644
 --- a/node_modules/@jaw.id/wagmi/dist/lib/Connector.js
 +++ b/node_modules/@jaw.id/wagmi/dist/lib/Connector.js
 @@ -66,25 +66,17 @@ export function jaw(parameters) {
@@ -39,3 +39,17 @@ index 6714813..de1fc08 100644
                      currentChainId = await this.getChainId();
                  }
                  if (!currentChainId)
+@@ -115,11 +107,9 @@ export function jaw(parameters) {
+                     });
+                     currentChainId = chain?.id ?? currentChainId;
+                 }
+-                // Return accounts with capabilities if wallet_connect was used, otherwise plain accounts
++                // Always return plain address strings for wagmi compatibility
+                 return {
+-                    accounts: (accountsWithCapabilities.length > 0
+-                        ? accountsWithCapabilities
+-                        : accounts),
++                    accounts,
+                     chainId: currentChainId,
+                 };
+             }
