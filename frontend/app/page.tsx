@@ -15,17 +15,10 @@ export default function Home() {
 
         <div className="space-y-4 max-w-md mx-auto">
           <button
-            onClick={() => router.push('/auth?mode=signup')}
+            onClick={() => router.push('/auth')}
             className="w-full bg-white text-blue-600 py-4 px-8 rounded-lg text-lg font-semibold hover:bg-gray-100 transition shadow-lg"
           >
-            Create Account
-          </button>
-
-          <button
-            onClick={() => router.push('/auth?mode=signin')}
-            className="w-full bg-transparent border-2 border-white text-white py-4 px-8 rounded-lg text-lg font-semibold hover:bg-white/10 transition"
-          >
-            Sign In
+            Enter JAW Games
           </button>
         </div>
 
