@@ -2,7 +2,8 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useGameWebSocket, type GameState } from '@/lib/hooks/useGameWebSocket';
+import { useGameWebSocket } from '@/lib/hooks/useGameWebSocket';
+import { BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
 export default function PlayGamePage() {
   const router = useRouter();
@@ -136,7 +137,7 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
             <div className="mb-6">
               <p className="text-gray-400 text-sm mb-2">Settlement transaction:</p>
               <a
-                href={`https://sepolia.basescan.org/tx/${gameEnd.txHash}`}
+                href={`${BLOCK_EXPLORER_URL}/tx/${gameEnd.txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:underline text-sm break-all"

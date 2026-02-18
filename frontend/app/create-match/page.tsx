@@ -5,7 +5,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { keccak256, toHex, parseUnits } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
-import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, TOKENS } from '@/lib/contracts';
+import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
 
 type Step = 'form' | 'api' | 'blockchain' | 'confirming' | 'done';
 
@@ -153,7 +153,7 @@ function CreateMatchContent() {
                 disabled={isProcessing}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
               />
-              <p className="mt-1 text-sm text-gray-500">Enter their username without .lafung.eth</p>
+              <p className="mt-1 text-sm text-gray-500">Enter their username without .{ENS_DOMAIN}</p>
             </div>
 
             <div>
@@ -170,7 +170,7 @@ function CreateMatchContent() {
                 />
                 <div className="absolute right-3 top-3 text-gray-500">USD</div>
               </div>
-              <p className="mt-1 text-sm text-gray-500">Minimum stake: $1</p>
+              <p className="mt-1 text-sm text-gray-500">Minimum stake: ${MIN_STAKE}</p>
             </div>
 
             <div>
@@ -217,14 +217,14 @@ function CreateMatchContent() {
               </div>
               <div className="border-t border-gray-200 my-2 pt-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Platform fee (20%):</span>
+                  <span className="text-gray-600">Platform fee ({PLATFORM_FEE * 100}%):</span>
                   <span className="font-semibold text-red-600">
-                    -{(Number(stakeAmount) * 2 * 0.2).toFixed(2)} {token}
+                    -{(Number(stakeAmount) * 2 * PLATFORM_FEE).toFixed(2)} {token}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-bold text-green-600">
                   <span>Winner receives:</span>
-                  <span>{(Number(stakeAmount) * 2 * 0.8).toFixed(2)} {token}</span>
+                  <span>{(Number(stakeAmount) * 2 * WINNER_SHARE).toFixed(2)} {token}</span>
                 </div>
               </div>
             </div>
@@ -237,7 +237,7 @@ function CreateMatchContent() {
 
             <button
               onClick={handleCreateMatch}
-              disabled={isProcessing || !opponentUsername || Number(stakeAmount) < 1}
+              disabled={isProcessing || !opponentUsername || Number(stakeAmount) < MIN_STAKE}
               className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? getStepMessage() : 'Create Match & Send Invite'}

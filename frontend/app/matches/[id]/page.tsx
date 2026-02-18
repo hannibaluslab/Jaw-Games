@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { formatUnits } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
-import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI } from '@/lib/contracts';
+import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
 type Action = 'idle' | 'accepting' | 'approving' | 'depositing';
 
@@ -140,7 +140,7 @@ export default function MatchDetailsPage() {
   }
 
   const stakeDisplay = Number(formatUnits(BigInt(match.stake_amount), 6));
-  const tokenSymbol = match.token_address?.toLowerCase().includes('833589') ? 'USDC' : 'USDT';
+  const tokenSymbol = getTokenSymbol(match.token_address);
   const isProcessing = action !== 'idle' || isTxPending;
 
   return (
@@ -181,7 +181,7 @@ export default function MatchDetailsPage() {
             <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
               <div className="text-sm text-gray-600 mb-1">Player 1 (X)</div>
               <div className="text-lg font-bold text-gray-900 mb-2">
-                {match.player_a_username || 'Unknown'}.lafung.eth
+                {match.player_a_username || 'Unknown'}.{ENS_DOMAIN}
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Stake:</span>
@@ -195,7 +195,7 @@ export default function MatchDetailsPage() {
             <div className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
               <div className="text-sm text-gray-600 mb-1">Player 2 (O)</div>
               <div className="text-lg font-bold text-gray-900 mb-2">
-                {match.player_b_username || 'Unknown'}.lafung.eth
+                {match.player_b_username || 'Unknown'}.{ENS_DOMAIN}
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Stake:</span>
@@ -214,12 +214,12 @@ export default function MatchDetailsPage() {
               <span className="font-semibold">{stakeDisplay * 2} {tokenSymbol}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Platform Fee (20%):</span>
-              <span className="font-semibold text-red-600">-{(stakeDisplay * 2 * 0.2).toFixed(2)} {tokenSymbol}</span>
+              <span className="text-gray-600">Platform Fee ({PLATFORM_FEE * 100}%):</span>
+              <span className="font-semibold text-red-600">-{(stakeDisplay * 2 * PLATFORM_FEE).toFixed(2)} {tokenSymbol}</span>
             </div>
             <div className="border-t pt-2 flex justify-between">
               <span className="font-bold text-gray-900">Winner Receives:</span>
-              <span className="font-bold text-green-600">{(stakeDisplay * 2 * 0.8).toFixed(2)} {tokenSymbol}</span>
+              <span className="font-bold text-green-600">{(stakeDisplay * 2 * WINNER_SHARE).toFixed(2)} {tokenSymbol}</span>
             </div>
           </div>
         </div>
@@ -269,7 +269,7 @@ export default function MatchDetailsPage() {
               </p>
             )}
             <a
-              href={`https://sepolia.basescan.org/tx/${match.settlement_tx_hash}`}
+              href={`${BLOCK_EXPLORER_URL}/tx/${match.settlement_tx_hash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:underline text-sm"

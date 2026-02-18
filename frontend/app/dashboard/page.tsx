@@ -5,6 +5,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useDisconnect } from 'wagmi';
 import { useApi } from '@/lib/hooks/useApi';
 import { formatUnits } from 'viem';
+import { getTokenSymbol, ENS_DOMAIN } from '@/lib/contracts';
 
 function DashboardContent() {
   const router = useRouter();
@@ -59,7 +60,7 @@ function DashboardContent() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">JAW Games</h1>
-            <p className="text-sm text-gray-600">{username}.lafung.eth</p>
+            <p className="text-sm text-gray-600">{username}.{ENS_DOMAIN}</p>
           </div>
           <button onClick={handleSignOut} className="text-sm text-gray-600 hover:text-gray-900">
             Sign Out
@@ -123,7 +124,7 @@ function DashboardContent() {
             <div className="space-y-3">
               {matches.slice(0, 10).map((match) => {
                 const stakeDisplay = Number(formatUnits(BigInt(match.stake_amount), 6));
-                const tokenSymbol = match.token_address?.toLowerCase().includes('833589') ? 'USDC' : 'USDT';
+                const tokenSymbol = getTokenSymbol(match.token_address);
                 const opponent = match.player_a_username === username ? match.player_b_username : match.player_a_username;
 
                 const statusLabel: Record<string, string> = {

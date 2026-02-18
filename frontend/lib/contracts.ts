@@ -24,6 +24,20 @@ export const TOKENS = {
   },
 } as const;
 
+export const PLATFORM_FEE = 0.2;
+export const WINNER_SHARE = 1 - PLATFORM_FEE;
+export const MIN_STAKE = 1;
+export const ENS_DOMAIN = 'lafung.eth';
+export const BLOCK_EXPLORER_URL = 'https://sepolia.basescan.org';
+
+export function getTokenSymbol(tokenAddress?: string): string {
+  if (!tokenAddress) return 'USDC';
+  const lower = tokenAddress.toLowerCase();
+  if (lower === USDC_ADDRESS.toLowerCase()) return 'USDC';
+  if (lower === USDT_ADDRESS.toLowerCase()) return 'USDT';
+  return 'USDC';
+}
+
 export const ESCROW_ABI = [
   {
     inputs: [

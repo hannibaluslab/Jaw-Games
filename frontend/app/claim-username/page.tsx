@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { apiClient } from '@/lib/api';
+import { ENS_DOMAIN } from '@/lib/contracts';
 
 export default function ClaimUsernamePage() {
   const router = useRouter();
@@ -55,10 +56,7 @@ export default function ClaimUsernamePage() {
       setClaiming(true);
       setError(null);
 
-      const ensName = `${username}.lafung.eth`;
-
-      // TODO: Claim ENS subname via JAW SDK
-      // await jaw.claimSubname(username, 'lafung.eth');
+      const ensName = `${username}.${ENS_DOMAIN}`;
 
       // Register user in backend
       const response = await apiClient.registerUser({
@@ -118,7 +116,7 @@ export default function ClaimUsernamePage() {
               <p className="text-sm text-gray-700">
                 Your ENS name will be:{' '}
                 <span className="font-semibold text-blue-600">
-                  {username}.lafung.eth
+                  {username}.{ENS_DOMAIN}
                 </span>
               </p>
             </div>

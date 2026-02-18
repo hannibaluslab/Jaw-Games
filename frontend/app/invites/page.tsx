@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useApi } from '@/lib/hooks/useApi';
 import { formatUnits } from 'viem';
+import { getTokenSymbol } from '@/lib/contracts';
 
 export default function InvitesPage() {
   const router = useRouter();
@@ -61,7 +62,7 @@ export default function InvitesPage() {
           <div className="space-y-4">
             {invites.map((invite) => {
               const stakeDisplay = Number(formatUnits(BigInt(invite.stake_amount), 6));
-              const tokenSymbol = invite.token_address?.toLowerCase().includes('833589') ? 'USDC' : 'USDT';
+              const tokenSymbol = getTokenSymbol(invite.token_address);
 
               return (
                 <button
