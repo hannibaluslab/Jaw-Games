@@ -2,12 +2,12 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { formatUnits } from 'viem';
+import { useAccount, useSendCalls } from 'wagmi';
+import { formatUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
-type Action = 'idle' | 'accepting' | 'approving' | 'depositing';
+type Action = 'idle' | 'accepting' | 'depositing';
 
 export default function MatchDetailsPage() {
   const router = useRouter();
@@ -21,8 +21,7 @@ export default function MatchDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<Action>('idle');
 
-  const { writeContract, data: txHash, isPending: isTxPending, error: txError, reset: resetTx } = useWriteContract();
-  const { isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+  const { sendCalls, isPending: isTxPending } = useSendCalls();
 
   const currentUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
 
@@ -43,36 +42,6 @@ export default function MatchDetailsPage() {
     return () => clearInterval(interval);
   }, [fetchMatch]);
 
-  // Handle tx confirmation
-  useEffect(() => {
-    if (!isConfirmed || !txHash || !match) return;
-
-    const handleConfirmed = async () => {
-      if (action === 'accepting') {
-        await api.confirmMatchAccepted(matchId, txHash);
-      } else if (action === 'depositing') {
-        await api.confirmDeposit(matchId, address!, txHash);
-      }
-      // approving doesn't need backend confirmation, proceed to deposit
-      if (action === 'approving') {
-        resetTx();
-        handleDeposit();
-        return;
-      }
-      setAction('idle');
-      resetTx();
-      fetchMatch();
-    };
-    handleConfirmed();
-  }, [isConfirmed, txHash]);
-
-  useEffect(() => {
-    if (txError) {
-      setError(txError.message || 'Transaction failed');
-      setAction('idle');
-    }
-  }, [txError]);
-
   const isPlayerA = match && currentUsername === match.player_a_username;
   const isPlayerB = match && currentUsername === match.player_b_username;
   const myDeposited = isPlayerA ? match?.player_a_deposited : match?.player_b_deposited;
@@ -80,32 +49,63 @@ export default function MatchDetailsPage() {
   const handleAccept = () => {
     setAction('accepting');
     setError(null);
-    writeContract({
-      address: ESCROW_CONTRACT_ADDRESS,
-      abi: ESCROW_ABI,
-      functionName: 'acceptMatch',
-      args: [matchId as `0x${string}`],
+    sendCalls({
+      calls: [{
+        to: ESCROW_CONTRACT_ADDRESS,
+        data: encodeFunctionData({
+          abi: ESCROW_ABI,
+          functionName: 'acceptMatch',
+          args: [matchId as `0x${string}`],
+        }),
+      }],
+    }, {
+      onSuccess: (result) => {
+        api.confirmMatchAccepted(matchId, result).then(() => {
+          setAction('idle');
+          fetchMatch();
+        });
+      },
+      onError: (err) => {
+        setError(err.message || 'Transaction failed');
+        setAction('idle');
+      },
     });
   };
 
+  // Batch approve + deposit in a single sendCalls (one tx via smart account)
   const handleApproveAndDeposit = () => {
-    setAction('approving');
-    setError(null);
-    writeContract({
-      address: match.token_address as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: 'approve',
-      args: [ESCROW_CONTRACT_ADDRESS, BigInt(match.stake_amount)],
-    });
-  };
-
-  const handleDeposit = () => {
     setAction('depositing');
-    writeContract({
-      address: ESCROW_CONTRACT_ADDRESS,
-      abi: ESCROW_ABI,
-      functionName: 'deposit',
-      args: [matchId as `0x${string}`],
+    setError(null);
+    sendCalls({
+      calls: [
+        {
+          to: match.token_address as `0x${string}`,
+          data: encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [ESCROW_CONTRACT_ADDRESS, BigInt(match.stake_amount)],
+          }),
+        },
+        {
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'deposit',
+            args: [matchId as `0x${string}`],
+          }),
+        },
+      ],
+    }, {
+      onSuccess: (result) => {
+        api.confirmDeposit(matchId, address!, result).then(() => {
+          setAction('idle');
+          fetchMatch();
+        });
+      },
+      onError: (err) => {
+        setError(err.message || 'Transaction failed');
+        setAction('idle');
+      },
     });
   };
 
@@ -247,7 +247,7 @@ export default function MatchDetailsPage() {
             disabled={isProcessing}
             className="w-full bg-green-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 text-lg mt-4"
           >
-            {action === 'approving' ? 'Approving token...' : action === 'depositing' ? 'Depositing...' : `Approve & Deposit ${stakeDisplay} ${tokenSymbol}`}
+            {action === 'depositing' ? 'Confirm in wallet...' : `Approve & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
         )}
 

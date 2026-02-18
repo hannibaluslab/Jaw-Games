@@ -2,12 +2,12 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { keccak256, toHex, parseUnits } from 'viem';
+import { useAccount, useSendCalls } from 'wagmi';
+import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
 
-type Step = 'form' | 'api' | 'blockchain' | 'confirming' | 'done';
+type Step = 'form' | 'api' | 'blockchain' | 'done';
 
 function CreateMatchContent() {
   const router = useRouter();
@@ -20,33 +20,12 @@ function CreateMatchContent() {
   const [token, setToken] = useState<'USDC' | 'USDT'>('USDC');
   const [step, setStep] = useState<Step>('form');
   const [error, setError] = useState<string | null>(null);
-  const [matchData, setMatchData] = useState<any>(null);
 
-  const { writeContract, data: txHash, isPending: isTxPending, error: txError } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
+  const { sendCalls, isPending: isTxPending } = useSendCalls();
 
   useEffect(() => {
     if (!isConnected) router.push('/auth');
   }, [isConnected, router]);
-
-  // When tx is confirmed, notify backend and navigate
-  useEffect(() => {
-    if (isConfirmed && txHash && matchData) {
-      setStep('done');
-      api.confirmMatchCreated(matchData.matchId, txHash).then(() => {
-        router.push(`/matches/${encodeURIComponent(matchData.matchId)}`);
-      });
-    }
-  }, [isConfirmed, txHash, matchData, api, router]);
-
-  useEffect(() => {
-    if (txError) {
-      setError(txError.message || 'Transaction failed');
-      setStep('form');
-    }
-  }, [txError]);
 
   const handleCreateMatch = async () => {
     if (!opponentUsername || !stakeAmount || !address) return;
@@ -72,30 +51,45 @@ function CreateMatchContent() {
       }
 
       const data = response.data!;
-      setMatchData(data);
       setStep('blockchain');
 
-      // Step 2: Call escrow contract
+      // Step 2: Call escrow contract via sendCalls (EIP-5792, uses USDC paymaster)
       const gameIdHash = keccak256(toHex('tictactoe'));
       const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
       const acceptBy = BigInt(Math.floor(new Date(data.deadlines.acceptBy).getTime() / 1000));
       const depositBy = BigInt(Math.floor(new Date(data.deadlines.depositBy).getTime() / 1000));
       const settleBy = BigInt(Math.floor(new Date(data.deadlines.settleBy).getTime() / 1000));
 
-      writeContract({
-        address: ESCROW_CONTRACT_ADDRESS,
-        abi: ESCROW_ABI,
-        functionName: 'createMatch',
-        args: [
-          data.matchId as `0x${string}`,
-          gameIdHash,
-          data.opponentAddress as `0x${string}`,
-          stakeAmountParsed,
-          tokenInfo.address,
-          acceptBy,
-          depositBy,
-          settleBy,
-        ],
+      sendCalls({
+        calls: [{
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'createMatch',
+            args: [
+              data.matchId as `0x${string}`,
+              gameIdHash,
+              data.opponentAddress as `0x${string}`,
+              stakeAmountParsed,
+              tokenInfo.address,
+              acceptBy,
+              depositBy,
+              settleBy,
+            ],
+          }),
+        }],
+      }, {
+        onSuccess: (result) => {
+          setStep('done');
+          // Notify backend and navigate
+          api.confirmMatchCreated(data.matchId, result).then(() => {
+            router.push(`/matches/${encodeURIComponent(data.matchId)}`);
+          });
+        },
+        onError: (err) => {
+          setError(err.message || 'Transaction failed');
+          setStep('form');
+        },
       });
     } catch (err: any) {
       console.error('Create match error:', err);
@@ -108,7 +102,6 @@ function CreateMatchContent() {
     switch (step) {
       case 'api': return 'Creating match...';
       case 'blockchain': return isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...';
-      case 'confirming': return 'Waiting for confirmation...';
       case 'done': return 'Match created! Redirecting...';
       default: return '';
     }
