@@ -138,15 +138,39 @@ class UserController {
   }
 
   /**
-   * Get user profile by wallet address
+   * Get user profile by wallet address (auto-registers if new)
    */
   static async getUserByAddress(req, res) {
     try {
       const { address } = req.params;
 
-      const user = await User.findByAddress(address);
+      let user = await User.findByAddress(address);
+
+      // Auto-register new users on first lookup
       if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+        let username = null;
+        try {
+          const ensName = await ENSService.reverseResolve(address);
+          if (ensName) {
+            const match = ensName.match(/^(.+)\.lafung\.eth$/i);
+            if (match) username = match[1];
+          }
+        } catch (e) {
+          // ENS lookup failed, fall back to address-based name
+        }
+
+        if (!username) {
+          username = `player_${address.slice(2, 8).toLowerCase()}`;
+        }
+
+        // Ensure username is unique
+        const existing = await User.findByUsername(username);
+        if (existing) {
+          username = `${username}_${Date.now().toString(36)}`;
+        }
+
+        const ensName = `${username}.lafung.eth`;
+        user = await User.create(username, ensName, address);
       }
 
       res.json({
