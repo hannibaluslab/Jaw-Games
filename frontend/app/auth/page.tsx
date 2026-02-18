@@ -1,14 +1,11 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAccount, useConnect } from 'wagmi';
 
-function AuthContent() {
+export default function AuthPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const mode = searchParams.get('mode') || 'signin';
-
   const { isConnected, address } = useAccount();
   const { connect, connectors, isPending, error: connectError } = useConnect();
 
@@ -16,12 +13,7 @@ function AuthContent() {
 
   useEffect(() => {
     if (isConnected && address) {
-      const storedUsername = localStorage.getItem('username');
-      if (storedUsername) {
-        router.push('/dashboard');
-      } else {
-        router.push('/claim-username');
-      }
+      router.push('/dashboard');
     }
   }, [isConnected, address, router]);
 
@@ -43,10 +35,10 @@ function AuthContent() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8">
         <h2 className="text-3xl font-bold text-center mb-2">
-          {mode === 'signup' ? 'Create Account' : 'Sign In'}
+          JAW Games
         </h2>
         <p className="text-center text-gray-600 mb-8">
-          Use your passkey to continue
+          Sign in or create an account with your passkey
         </p>
 
         <div className="space-y-4">
@@ -69,7 +61,7 @@ function AuthContent() {
                 Connecting...
               </span>
             ) : (
-              mode === 'signup' ? 'Create Account with Passkey' : 'Sign In with Passkey'
+              'Enter JAW Games'
             )}
           </button>
 
@@ -78,38 +70,12 @@ function AuthContent() {
               {error}
             </div>
           )}
-
-          <div className="text-center text-sm text-gray-600 mt-6">
-            <p>
-              {mode === 'signup'
-                ? 'Already have an account?'
-                : "Don't have an account?"}{' '}
-              <button
-                onClick={() =>
-                  router.push(
-                    `/auth?mode=${mode === 'signup' ? 'signin' : 'signup'}`
-                  )
-                }
-                className="text-blue-600 hover:underline font-semibold"
-              >
-                {mode === 'signup' ? 'Sign in' : 'Create one'}
-              </button>
-            </p>
-          </div>
         </div>
       </div>
 
       <div className="mt-8 text-center text-sm text-gray-600 max-w-md">
-        <p>No extension or app needed — just your device's passkey.</p>
+        <p>No extension or app needed — just your device&apos;s passkey.</p>
       </div>
     </div>
-  );
-}
-
-export default function AuthPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <AuthContent />
-    </Suspense>
   );
 }
