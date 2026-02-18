@@ -27,23 +27,12 @@ class MatchController {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      // Resolve opponent username to address
-      const opponentEnsName = opponentUsername.endsWith('.lafung.eth')
-        ? opponentUsername
-        : `${opponentUsername}.lafung.eth`;
-
-      const opponentAddress = await ENSService.resolveENS(opponentEnsName);
-      if (!opponentAddress) {
+      // Look up opponent by username in database
+      const playerB = await User.findByUsername(opponentUsername);
+      if (!playerB) {
         return res.status(404).json({ error: 'Opponent not found' });
       }
-
-      // Find opponent in database
-      const playerB = await User.findByAddress(opponentAddress);
-      if (!playerB) {
-        return res.status(404).json({
-          error: 'Opponent not registered in the platform',
-        });
-      }
+      const opponentAddress = playerB.smart_account_address;
 
       // Generate unique matchId
       const matchId = ethers.id(`match-${crypto.randomUUID()}-${Date.now()}`);
