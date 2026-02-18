@@ -28,9 +28,9 @@ class MatchController {
       }
 
       // Resolve opponent username to address
-      const opponentEnsName = opponentUsername.endsWith('.justan.id')
+      const opponentEnsName = opponentUsername.endsWith('.lafung.eth')
         ? opponentUsername
-        : `${opponentUsername}.justan.id`;
+        : `${opponentUsername}.lafung.eth`;
 
       const opponentAddress = await ENSService.resolveENS(opponentEnsName);
       if (!opponentAddress) {

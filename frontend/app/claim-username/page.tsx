@@ -55,10 +55,10 @@ export default function ClaimUsernamePage() {
       setClaiming(true);
       setError(null);
 
-      const ensName = `${username}.justan.id`;
+      const ensName = `${username}.lafung.eth`;
 
       // TODO: Claim ENS subname via JAW SDK
-      // await jaw.claimSubname(username, 'justan.id');
+      // await jaw.claimSubname(username, 'lafung.eth');
 
       // Register user in backend
       const response = await apiClient.registerUser({
@@ -118,7 +118,7 @@ export default function ClaimUsernamePage() {
               <p className="text-sm text-gray-700">
                 Your ENS name will be:{' '}
                 <span className="font-semibold text-blue-600">
-                  {username}.justan.id
+                  {username}.lafung.eth
                 </span>
               </p>
             </div>

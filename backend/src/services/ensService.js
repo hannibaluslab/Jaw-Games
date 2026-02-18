@@ -4,7 +4,7 @@ const { provider } = require('../config/blockchain');
 class ENSService {
   /**
    * Resolve ENS name to address
-   * @param {string} ensName - ENS name (e.g., "username.justan.id")
+   * @param {string} ensName - ENS name (e.g., "username.lafung.eth")
    * @returns {string|null} - Resolved address or null
    */
   static async resolveENS(ensName) {

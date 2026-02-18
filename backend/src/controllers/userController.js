@@ -127,7 +127,7 @@ class UserController {
       const user = await User.findByUsername(username);
       const available = !user;
 
-      const ensName = `${username}.justan.id`;
+      const ensName = `${username}.lafung.eth`;
       const ensAvailable = await ENSService.isAvailable(ensName);
 
       res.json({

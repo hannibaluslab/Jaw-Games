@@ -59,7 +59,7 @@ function DashboardContent() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">JAW Games</h1>
-            <p className="text-sm text-gray-600">{username}.justan.id</p>
+            <p className="text-sm text-gray-600">{username}.lafung.eth</p>
           </div>
           <button onClick={handleSignOut} className="text-sm text-gray-600 hover:text-gray-900">
             Sign Out

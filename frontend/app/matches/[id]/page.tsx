@@ -181,7 +181,7 @@ export default function MatchDetailsPage() {
             <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
               <div className="text-sm text-gray-600 mb-1">Player 1 (X)</div>
               <div className="text-lg font-bold text-gray-900 mb-2">
-                {match.player_a_username || 'Unknown'}.justan.id
+                {match.player_a_username || 'Unknown'}.lafung.eth
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Stake:</span>
@@ -195,7 +195,7 @@ export default function MatchDetailsPage() {
             <div className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
               <div className="text-sm text-gray-600 mb-1">Player 2 (O)</div>
               <div className="text-lg font-bold text-gray-900 mb-2">
-                {match.player_b_username || 'Unknown'}.justan.id
+                {match.player_b_username || 'Unknown'}.lafung.eth
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">Stake:</span>
