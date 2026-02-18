@@ -45,6 +45,7 @@ function DashboardContent() {
       const userRes = await api.getUserByAddress(address);
       const resolvedUsername = userRes.data?.username || address.slice(0, 8);
       setUsername(resolvedUsername);
+      localStorage.setItem('username', resolvedUsername);
 
       // Store user ID for auth on protected endpoints
       if (userRes.data?.id) {
