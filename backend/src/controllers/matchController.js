@@ -1,5 +1,5 @@
 const { ethers } = require('ethers');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const Match = require('../models/Match');
 const User = require('../models/User');
 const GameSession = require('../models/GameSession');
@@ -46,7 +46,7 @@ class MatchController {
       }
 
       // Generate unique matchId
-      const matchId = ethers.id(`match-${uuidv4()}-${Date.now()}`);
+      const matchId = ethers.id(`match-${crypto.randomUUID()}-${Date.now()}`);
 
       // Calculate deadlines
       const now = Math.floor(Date.now() / 1000);
