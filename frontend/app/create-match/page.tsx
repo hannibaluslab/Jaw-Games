@@ -5,7 +5,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useAccount, useSendCalls } from 'wagmi';
 import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
-import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
+import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
 
 type Step = 'form' | 'signing' | 'saving' | 'done';
 
@@ -13,7 +13,7 @@ function CreateMatchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const api = useApi();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, status } = useAccount();
 
   const [opponentUsername, setOpponentUsername] = useState('');
   const [opponentAddress, setOpponentAddress] = useState<string | null>(null);
@@ -27,8 +27,9 @@ function CreateMatchContent() {
 
   // Load players list to resolve opponent address client-side
   useEffect(() => {
+    if (status === 'connecting' || status === 'reconnecting') return;
     if (!isConnected) {
-      router.push('/auth');
+      router.push('/');
       return;
     }
     api.listPlayers().then((res) => {
@@ -36,7 +37,7 @@ function CreateMatchContent() {
         setPlayers(res.data.players);
       }
     });
-  }, [isConnected, router, api]);
+  }, [isConnected, status, router, api]);
 
   // Pre-fill opponent from query param
   useEffect(() => {
@@ -69,29 +70,47 @@ function CreateMatchContent() {
     const depositBy = BigInt(now + 86400 + 3600);
     const settleBy = BigInt(now + 86400 + 3600 + 7200);
 
-    // Call sendCalls immediately — no await before this (fixes mobile popup blocker)
+    // Batch: approve + createMatch + deposit in one tx (no extra step)
     sendCalls({
-      calls: [{
-        to: ESCROW_CONTRACT_ADDRESS,
-        data: encodeFunctionData({
-          abi: ESCROW_ABI,
-          functionName: 'createMatch',
-          args: [
-            matchId,
-            gameIdHash,
-            opponentAddress as `0x${string}`,
-            stakeAmountParsed,
-            tokenInfo.address,
-            acceptBy,
-            depositBy,
-            settleBy,
-          ],
-        }),
-      }],
+      calls: [
+        {
+          to: tokenInfo.address,
+          data: encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [ESCROW_CONTRACT_ADDRESS, stakeAmountParsed],
+          }),
+        },
+        {
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'createMatch',
+            args: [
+              matchId,
+              gameIdHash,
+              opponentAddress as `0x${string}`,
+              stakeAmountParsed,
+              tokenInfo.address,
+              acceptBy,
+              depositBy,
+              settleBy,
+            ],
+          }),
+        },
+        {
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'deposit',
+            args: [matchId],
+          }),
+        },
+      ],
     }, {
       onSuccess: async (result) => {
         setStep('saving');
-        // Save match to backend after tx succeeds
+        // Save match to backend with deposit flag
         const response = await api.createMatch({
           gameId: 'tictactoe',
           opponentUsername,
@@ -99,6 +118,7 @@ function CreateMatchContent() {
           token: tokenInfo.address,
           matchId,
           txHash: result.id,
+          playerADeposited: true,
         });
         if (response.error) {
           setError(response.error);
@@ -143,13 +163,13 @@ function CreateMatchContent() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-12">
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <div className="flex items-center mb-8">
-            <div className="text-6xl mr-4">#</div>
+      <main className="max-w-2xl mx-auto px-4 py-6 sm:py-12">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">
+          <div className="flex items-center mb-6 sm:mb-8">
+            <div className="text-4xl sm:text-6xl mr-3 sm:mr-4 shrink-0">#</div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Create Tic-Tac-Toe Match</h1>
-              <p className="text-gray-600">Challenge an opponent to a game</p>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Create Tic-Tac-Toe Match</h1>
+              <p className="text-gray-600 text-sm">Challenge an opponent to a game</p>
             </div>
           </div>
 
@@ -218,28 +238,31 @@ function CreateMatchContent() {
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <h3 className="font-semibold text-gray-900 mb-3">Match Summary</h3>
-              <div className="flex justify-between text-sm">
+            <div className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2">
+              <h3 className="font-semibold text-gray-900 mb-3 text-sm sm:text-base">Match Summary</h3>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-center mb-2">
+                <p className="text-blue-800 text-xs sm:text-sm font-medium">Single game — winner takes all</p>
+              </div>
+              <div className="flex justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Your stake:</span>
                 <span className="font-semibold">{stakeAmount} {token}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Opponent stake:</span>
                 <span className="font-semibold">{stakeAmount} {token}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Total pot:</span>
                 <span className="font-semibold">{Number(stakeAmount) * 2} {token}</span>
               </div>
               <div className="border-t border-gray-200 my-2 pt-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs sm:text-sm">
                   <span className="text-gray-600">Platform fee ({PLATFORM_FEE * 100}%):</span>
                   <span className="font-semibold text-red-600">
                     -{(Number(stakeAmount) * 2 * PLATFORM_FEE).toFixed(2)} {token}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-green-600">
+                <div className="flex justify-between text-xs sm:text-sm font-bold text-green-600">
                   <span>Winner receives:</span>
                   <span>{(Number(stakeAmount) * 2 * WINNER_SHARE).toFixed(2)} {token}</span>
                 </div>
@@ -255,13 +278,13 @@ function CreateMatchContent() {
             <button
               onClick={handleCreateMatch}
               disabled={isProcessing || !opponentValid || Number(stakeAmount) < MIN_STAKE}
-              className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold text-sm sm:text-base hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isProcessing ? getStepMessage() : 'Create Match & Send Invite'}
+              {isProcessing ? getStepMessage() : `Create Match & Deposit ${stakeAmount} ${token}`}
             </button>
 
             {isProcessing && (
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded text-sm">
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-3 sm:px-4 py-3 rounded text-xs sm:text-sm">
                 <p className="font-semibold">{getStepMessage()}</p>
                 {step === 'signing' && (
                   <p className="mt-1">Please approve the transaction in your wallet to create the match on-chain.</p>

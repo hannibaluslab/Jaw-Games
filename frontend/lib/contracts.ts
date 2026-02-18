@@ -24,7 +24,7 @@ export const TOKENS = {
   },
 } as const;
 
-export const PLATFORM_FEE = 0.2;
+export const PLATFORM_FEE = 0.05;
 export const WINNER_SHARE = 1 - PLATFORM_FEE;
 export const MIN_STAKE = 1;
 export const ENS_DOMAIN = 'lafung.eth';

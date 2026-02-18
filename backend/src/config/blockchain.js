@@ -2,7 +2,7 @@ const { ethers } = require('ethers');
 
 // Base network provider
 const provider = new ethers.JsonRpcProvider(
-  process.env.BASE_RPC_URL || 'https://mainnet.base.org'
+  process.env.BASE_RPC_URL || 'https://sepolia.base.org'
 );
 
 // Relayer wallet for submitting transactions
@@ -35,7 +35,7 @@ const TOKENS = {
   USDT: process.env.USDT_ADDRESS || '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
 };
 
-const CHAIN_ID = 8453; // Base mainnet
+const CHAIN_ID = parseInt(process.env.CHAIN_ID || '84532'); // Base Sepolia
 
 module.exports = {
   provider,

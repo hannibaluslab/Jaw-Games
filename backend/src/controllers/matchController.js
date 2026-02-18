@@ -13,7 +13,7 @@ class MatchController {
    */
   static async createMatch(req, res) {
     try {
-      const { gameId, opponentUsername, stakeAmount, token, matchId: clientMatchId, txHash } = req.body;
+      const { gameId, opponentUsername, stakeAmount, token, matchId: clientMatchId, txHash, playerADeposited } = req.body;
       const { userId } = req.user; // From auth middleware
 
       // Validate inputs
@@ -56,9 +56,14 @@ class MatchController {
         settleBy,
       });
 
-      // If tx already confirmed (tx-first flow from mobile), mark as created
+      // If tx already confirmed (tx-first flow), mark as created
       if (txHash) {
         await Match.updateStatus(matchId, 'created');
+      }
+
+      // If playerA also deposited in the same batch tx, mark deposit
+      if (playerADeposited) {
+        await Match.updateDeposit(matchId, playerA.id);
       }
 
       res.status(201).json({

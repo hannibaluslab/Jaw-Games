@@ -1,0 +1,41 @@
+diff --git a/node_modules/@jaw.id/wagmi/dist/lib/Connector.js b/node_modules/@jaw.id/wagmi/dist/lib/Connector.js
+index 6714813..de1fc08 100644
+--- a/node_modules/@jaw.id/wagmi/dist/lib/Connector.js
++++ b/node_modules/@jaw.id/wagmi/dist/lib/Connector.js
+@@ -66,25 +66,17 @@ export function jaw(parameters) {
+             const provider = await this.getProvider();
+             try {
+                 if (!accounts?.length && !isReconnecting) {
+-                    // Use wallet_connect if capabilities are requested, otherwise use eth_requestAccounts
+-                    if (capabilities && Object.keys(capabilities).length > 0) {
+-                        const walletConnectResponse = await provider.request({
+-                            method: 'wallet_connect',
+-                            params: [{ capabilities }],
+-                        });
+-                        // Extract accounts with their capabilities
+-                        accountsWithCapabilities = walletConnectResponse.accounts.map((acc) => ({
+-                            address: getAddress(acc.address),
+-                            capabilities: acc.capabilities,
+-                        }));
+-                        accounts = accountsWithCapabilities.map((acc) => acc.address);
+-                    }
+-                    else {
+-                        const accountsResult = await provider.request({
+-                            method: 'eth_requestAccounts',
+-                        });
+-                        accounts = parseAccounts(accountsResult);
+-                    }
++                    // Always use wallet_connect with silent:true to skip the connect confirmation dialog
++                    const walletConnectResponse = await provider.request({
++                        method: 'wallet_connect',
++                        params: [{ capabilities: capabilities || {}, silent: true }],
++                    });
++                    // Extract accounts with their capabilities
++                    accountsWithCapabilities = walletConnectResponse.accounts.map((acc) => ({
++                        address: getAddress(acc.address),
++                        capabilities: acc.capabilities,
++                    }));
++                    accounts = accountsWithCapabilities.map((acc) => acc.address);
+                     currentChainId = await this.getChainId();
+                 }
+                 if (!currentChainId)

@@ -156,68 +156,73 @@ export default function MatchDetailsPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-12">
-        <div className="mb-6">{getStatusBadge(match.status)}</div>
+      <main className="max-w-4xl mx-auto px-4 py-6 sm:py-12">
+        <div className="mb-4 sm:mb-6">{getStatusBadge(match.status)}</div>
 
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center">
-              <div className="text-6xl mr-4">#</div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Tic-Tac-Toe</h1>
-                <p className="text-gray-600 text-sm truncate max-w-xs">Match: {matchId}</p>
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8 mb-4 sm:mb-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
+            <div className="flex items-center min-w-0">
+              <div className="text-4xl sm:text-6xl mr-3 sm:mr-4 shrink-0">#</div>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Tic-Tac-Toe</h1>
+                <p className="text-gray-600 text-xs sm:text-sm truncate">Match: {matchId.slice(0, 10)}...</p>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-green-600">
+            <div className="text-right shrink-0">
+              <div className="text-xl sm:text-3xl font-bold text-green-600">
                 {stakeDisplay * 2} {tokenSymbol}
               </div>
-              <div className="text-sm text-gray-600">Total Pot</div>
+              <div className="text-xs sm:text-sm text-gray-600">Total Pot</div>
             </div>
           </div>
 
+          {/* Single game notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-4 sm:mb-6 text-center">
+            <p className="text-blue-800 text-xs sm:text-sm font-medium">Single game — winner takes all</p>
+          </div>
+
           {/* Players */}
-          <div className="grid grid-cols-2 gap-6 mb-6">
-            <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
-              <div className="text-sm text-gray-600 mb-1">Player 1 (X)</div>
-              <div className="text-lg font-bold text-gray-900 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-4 sm:mb-6">
+            <div className="border-2 border-blue-200 rounded-lg p-3 sm:p-4 bg-blue-50">
+              <div className="text-xs sm:text-sm text-gray-600 mb-1">Player 1 (X)</div>
+              <div className="text-sm sm:text-lg font-bold text-gray-900 mb-2 truncate">
                 {match.player_a_username || 'Unknown'}.{ENS_DOMAIN}
               </div>
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Stake:</span>
                 <span className="font-semibold">{stakeDisplay} {tokenSymbol}</span>
               </div>
-              <div className={`mt-2 flex items-center text-sm ${match.player_a_deposited ? 'text-green-600' : 'text-yellow-600'}`}>
+              <div className={`mt-2 flex items-center text-xs sm:text-sm ${match.player_a_deposited ? 'text-green-600' : 'text-yellow-600'}`}>
                 {match.player_a_deposited ? 'Deposited' : 'Awaiting deposit'}
               </div>
             </div>
 
-            <div className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
-              <div className="text-sm text-gray-600 mb-1">Player 2 (O)</div>
-              <div className="text-lg font-bold text-gray-900 mb-2">
+            <div className="border-2 border-purple-200 rounded-lg p-3 sm:p-4 bg-purple-50">
+              <div className="text-xs sm:text-sm text-gray-600 mb-1">Player 2 (O)</div>
+              <div className="text-sm sm:text-lg font-bold text-gray-900 mb-2 truncate">
                 {match.player_b_username || 'Unknown'}.{ENS_DOMAIN}
               </div>
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Stake:</span>
                 <span className="font-semibold">{stakeDisplay} {tokenSymbol}</span>
               </div>
-              <div className={`mt-2 flex items-center text-sm ${match.player_b_deposited ? 'text-green-600' : 'text-yellow-600'}`}>
+              <div className={`mt-2 flex items-center text-xs sm:text-sm ${match.player_b_deposited ? 'text-green-600' : 'text-yellow-600'}`}>
                 {match.player_b_deposited ? 'Deposited' : 'Awaiting deposit'}
               </div>
             </div>
           </div>
 
           {/* Prize Breakdown */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="flex justify-between text-sm">
+          <div className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2">
+            <div className="flex justify-between text-xs sm:text-sm">
               <span className="text-gray-600">Total Pot:</span>
               <span className="font-semibold">{stakeDisplay * 2} {tokenSymbol}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-xs sm:text-sm">
               <span className="text-gray-600">Platform Fee ({PLATFORM_FEE * 100}%):</span>
               <span className="font-semibold text-red-600">-{(stakeDisplay * 2 * PLATFORM_FEE).toFixed(2)} {tokenSymbol}</span>
             </div>
-            <div className="border-t pt-2 flex justify-between">
+            <div className="border-t pt-2 flex justify-between text-sm">
               <span className="font-bold text-gray-900">Winner Receives:</span>
               <span className="font-bold text-green-600">{(stakeDisplay * 2 * WINNER_SHARE).toFixed(2)} {tokenSymbol}</span>
             </div>
@@ -235,7 +240,7 @@ export default function MatchDetailsPage() {
           <button
             onClick={handleAccept}
             disabled={isProcessing}
-            className="w-full bg-blue-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 text-lg"
+            className="w-full bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 text-base sm:text-lg"
           >
             {action === 'accepting' ? 'Confirm in wallet...' : 'Accept Challenge'}
           </button>
@@ -245,7 +250,7 @@ export default function MatchDetailsPage() {
           <button
             onClick={handleApproveAndDeposit}
             disabled={isProcessing}
-            className="w-full bg-green-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 text-lg mt-4"
+            className="w-full bg-green-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 text-base sm:text-lg mt-4"
           >
             {action === 'depositing' ? 'Confirm in wallet...' : `Approve & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
@@ -254,15 +259,15 @@ export default function MatchDetailsPage() {
         {(match.status === 'ready' || match.status === 'in_progress') && (
           <button
             onClick={() => router.push(`/matches/${encodeURIComponent(matchId)}/play`)}
-            className="w-full bg-green-600 text-white py-4 px-6 rounded-lg font-semibold hover:bg-green-700 transition text-lg mt-4"
+            className="w-full bg-green-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-green-700 transition text-base sm:text-lg mt-4"
           >
             {match.status === 'in_progress' ? 'Rejoin Game' : 'Launch Game'}
           </button>
         )}
 
         {match.status === 'settled' && match.settlement_tx_hash && (
-          <div className="mt-4 bg-white rounded-xl shadow-lg p-6 text-center">
-            <p className="text-lg font-bold text-gray-900 mb-2">Match Settled</p>
+          <div className="mt-4 bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
+            <p className="text-base sm:text-lg font-bold text-gray-900 mb-2">Match Settled</p>
             {match.winner_id && (
               <p className="text-green-600 font-semibold mb-4">
                 Winner: {match.winner_username || 'Unknown'}
@@ -272,7 +277,7 @@ export default function MatchDetailsPage() {
               href={`${BLOCK_EXPLORER_URL}/tx/${match.settlement_tx_hash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline text-sm"
+              className="text-blue-600 hover:underline text-xs sm:text-sm"
             >
               View settlement on BaseScan
             </a>

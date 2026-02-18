@@ -101,12 +101,15 @@ class WebSocketService {
       await Match.updateStatus(matchId, 'in_progress');
     }
 
-    // Send current game state
+    // Send current game state (game_state is jsonb — pg returns it as object)
+    const gameState = session
+      ? (typeof session.game_state === 'string' ? JSON.parse(session.game_state) : session.game_state)
+      : null;
     ws.send(
       JSON.stringify({
         type: 'match_joined',
         matchId,
-        gameState: session ? JSON.parse(session.game_state) : null,
+        gameState,
         match,
       })
     );
@@ -147,7 +150,7 @@ class WebSocketService {
         throw new Error('Game session not found');
       }
 
-      const currentState = JSON.parse(session.game_state);
+      const currentState = typeof session.game_state === 'string' ? JSON.parse(session.game_state) : session.game_state;
 
       // Validate and make move
       const newState = TicTacToe.makeMove(currentState, userId, move.cell);
@@ -190,16 +193,21 @@ class WebSocketService {
         // Get result
         const result = TicTacToe.getResult(newState);
 
-        // Submit settlement
-        const txHash = await SettlementService.processMatchResult(
-          matchId,
-          result.winner,
-          {
-            finalState: newState,
-            winner: result.winner,
-            winningSymbol: result.winningSymbol,
-          }
-        );
+        // Submit settlement (don't block game_ended broadcast on failure)
+        let txHash = null;
+        try {
+          txHash = await SettlementService.processMatchResult(
+            matchId,
+            result.winner,
+            {
+              finalState: newState,
+              winner: result.winner,
+              winningSymbol: result.winningSymbol,
+            }
+          );
+        } catch (settlementError) {
+          console.error('Settlement failed (will retry later):', settlementError.message);
+        }
 
         this.broadcastToMatch(matchId, null, {
           type: 'game_ended',

@@ -10,7 +10,7 @@ import { getTokenSymbol, ENS_DOMAIN, USDC_ADDRESS, TOKENS, ERC20_ABI } from '@/l
 function DashboardContent() {
   const router = useRouter();
   const api = useApi();
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, status } = useAccount();
   const { disconnect } = useDisconnect();
 
   const [username, setUsername] = useState<string | null>(null);
@@ -35,25 +35,24 @@ function DashboardContent() {
   const { sendCalls, isPending: isSending } = useSendCalls();
 
   useEffect(() => {
+    // Wait for wagmi to finish reconnecting before deciding to redirect
+    if (status === 'connecting' || status === 'reconnecting') return;
     if (!isConnected || !address) {
-      router.push('/auth');
+      router.push('/');
       return;
     }
 
     const init = async () => {
-      // Fetch username from backend by wallet address
       const userRes = await api.getUserByAddress(address);
       const resolvedUsername = userRes.data?.username || address.slice(0, 8);
       setUsername(resolvedUsername);
       localStorage.setItem('username', resolvedUsername);
 
-      // Store user ID for auth on protected endpoints
       if (userRes.data?.id) {
         localStorage.setItem('userId', userRes.data.id);
         api.setAuthToken(userRes.data.id);
       }
 
-      // Fetch invites, matches, and players in parallel
       const [invitesRes, matchesRes, playersRes] = await Promise.all([
         api.getPendingInvites(resolvedUsername),
         api.getUserMatches(resolvedUsername),
@@ -67,7 +66,6 @@ function DashboardContent() {
         setMatches(matchesRes.data.matches || []);
       }
       if (playersRes.data) {
-        // Exclude current user from the players list
         setPlayers(
           (playersRes.data.players || []).filter(
             (p) => p.smartAccountAddress.toLowerCase() !== address.toLowerCase()
@@ -78,7 +76,7 @@ function DashboardContent() {
     };
 
     init();
-  }, [api, router, isConnected, address]);
+  }, [api, router, isConnected, address, status]);
 
   const handleSendUSDC = (recipientAddress: string) => {
     setSendError(null);
@@ -116,45 +114,45 @@ function DashboardContent() {
   };
 
   if (!username) {
-    return <div>Loading...</div>;
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500">Loading...</div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">JAW Games</h1>
-            <p className="text-sm text-gray-600">{username}.{ENS_DOMAIN}</p>
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900">JAW Games</h1>
+            <p className="text-xs sm:text-sm text-gray-600 truncate">{username}.{ENS_DOMAIN}</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <div className="text-right">
-              <p className="text-lg font-bold text-gray-900">
+              <p className="text-sm sm:text-lg font-bold text-gray-900">
                 {usdcBalance !== undefined ? Number(formatUnits(usdcBalance as bigint, TOKENS.USDC.decimals)).toFixed(2) : '...'} USDC
               </p>
             </div>
-            <button onClick={handleSignOut} className="text-sm text-gray-600 hover:text-gray-900">
+            <button onClick={handleSignOut} className="text-xs sm:text-sm text-gray-600 hover:text-gray-900">
               Sign Out
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 sm:py-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           {/* Games Card */}
           <button
             onClick={() => router.push('/games')}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
+            className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
           >
             <div className="flex items-center">
-              <svg className="w-12 h-12 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <h2 className="text-2xl font-bold">Play</h2>
-                <p className="text-blue-100">Challenge someone to Tic-Tac-Toe</p>
+                <h2 className="text-xl sm:text-2xl font-bold">Play</h2>
+                <p className="text-blue-100 text-sm">Challenge someone to Tic-Tac-Toe</p>
               </div>
             </div>
           </button>
@@ -162,19 +160,19 @@ function DashboardContent() {
           {/* Invites Card */}
           <button
             onClick={() => router.push('/invites')}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-8 hover:shadow-lg transition transform hover:scale-105 text-left relative"
+            className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left relative"
           >
             <div className="flex items-center">
-              <svg className="w-12 h-12 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               <div>
-                <h2 className="text-2xl font-bold">Invites</h2>
-                <p className="text-purple-100">View pending challenges</p>
+                <h2 className="text-xl sm:text-2xl font-bold">Invites</h2>
+                <p className="text-purple-100 text-sm">View pending challenges</p>
               </div>
             </div>
             {inviteCount > 0 && (
-              <div className="absolute top-4 right-4 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+              <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
                 {inviteCount}
               </div>
             )}
@@ -182,8 +180,8 @@ function DashboardContent() {
         </div>
 
         {/* Players */}
-        <div className="mt-12">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Players</h3>
+        <div className="mt-8 sm:mt-12">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Players</h3>
           {players.length === 0 ? (
             <div className="bg-white rounded-xl shadow p-6">
               <p className="text-gray-500 text-center py-4">No other players yet.</p>
@@ -192,21 +190,21 @@ function DashboardContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {players.map((player) => (
                 <div key={player.id} className="bg-white rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-gray-900">{player.username}</p>
-                      <p className="text-xs text-gray-500">{player.ensName}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{player.username}</p>
+                      <p className="text-xs text-gray-500 truncate">{player.ensName}</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                       <button
                         onClick={() => { setSendingTo(sendingTo === player.id ? null : player.id); setSendAmount(''); setSendError(null); }}
-                        className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition"
+                        className="bg-green-600 text-white text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition"
                       >
                         Send
                       </button>
                       <button
                         onClick={() => router.push(`/create-match?opponent=${player.username}`)}
-                        className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+                        className="bg-blue-600 text-white text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
                       >
                         Challenge
                       </button>
@@ -222,14 +220,14 @@ function DashboardContent() {
                           placeholder="Amount USDC"
                           step="0.01"
                           min="0"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         />
                         <button
                           onClick={() => handleSendUSDC(player.smartAccountAddress)}
                           disabled={isSending || !sendAmount}
                           className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-50"
                         >
-                          {isSending ? 'Sending...' : 'Confirm'}
+                          {isSending ? '...' : 'Confirm'}
                         </button>
                       </div>
                       {sendError && (
@@ -244,8 +242,8 @@ function DashboardContent() {
         </div>
 
         {/* Recent Matches */}
-        <div className="mt-12">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Matches</h3>
+        <div className="mt-8 sm:mt-12">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Recent Matches</h3>
           {matchesLoading ? (
             <div className="bg-white rounded-xl shadow p-6 text-center text-gray-500">Loading...</div>
           ) : matches.length === 0 ? (
@@ -277,15 +275,15 @@ function DashboardContent() {
                     onClick={() => router.push(`/matches/${encodeURIComponent(match.match_id)}`)}
                     className="w-full bg-white rounded-lg shadow p-4 text-left hover:shadow-md transition flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">#</span>
-                      <div>
-                        <p className="font-semibold text-gray-900">vs {opponent || 'Unknown'}</p>
-                        <p className="text-sm text-gray-500">{statusLabel[match.status] || match.status}</p>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-xl sm:text-2xl shrink-0">#</span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">vs {opponent || 'Unknown'}</p>
+                        <p className="text-xs sm:text-sm text-gray-500">{statusLabel[match.status] || match.status}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">{stakeDisplay} {tokenSymbol}</p>
+                    <div className="text-right shrink-0 ml-2">
+                      <p className="font-semibold text-gray-900 text-sm sm:text-base">{stakeDisplay} {tokenSymbol}</p>
                       {match.status === 'settled' && match.winner_username && (
                         <p className={`text-xs ${match.winner_username === username ? 'text-green-600' : 'text-red-600'}`}>
                           {match.winner_username === username ? 'Won' : 'Lost'}
