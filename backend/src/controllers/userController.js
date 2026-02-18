@@ -187,6 +187,48 @@ class UserController {
   }
 
   /**
+   * Update username for a user (by address)
+   */
+  static async updateUsername(req, res) {
+    try {
+      const { address } = req.params;
+      const { username } = req.body;
+
+      if (!username || username.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters' });
+      }
+
+      if (!/^[a-z0-9_]+$/.test(username)) {
+        return res.status(400).json({ error: 'Username can only contain lowercase letters, numbers, and underscores' });
+      }
+
+      const user = await User.findByAddress(address);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Check if desired username is taken by someone else
+      const existing = await User.findByUsername(username);
+      if (existing && existing.id !== user.id) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+
+      const ensName = `${username}.lafung.eth`;
+      const updated = await User.update(user.id, { username, ens_name: ensName });
+
+      res.json({
+        id: updated.id,
+        username: updated.username,
+        ensName: updated.ens_name,
+        smartAccountAddress: updated.smart_account_address,
+      });
+    } catch (error) {
+      console.error('Update username error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
    * Check username availability
    */
   static async checkUsername(req, res) {

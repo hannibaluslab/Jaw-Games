@@ -60,6 +60,13 @@ export class ApiClient {
     });
   }
 
+  async put<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
   // User endpoints
   async registerUser(data: {
     username: string;
@@ -87,6 +94,10 @@ export class ApiClient {
 
   async listPlayers(): Promise<ApiResponse<{ players: { id: string; username: string; ensName: string; smartAccountAddress: string }[] }>> {
     return this.get('/api/users');
+  }
+
+  async updateUsername(address: string, username: string): Promise<ApiResponse<{ id: string; username: string; ensName: string; smartAccountAddress: string }>> {
+    return this.put(`/api/users/address/${address}/username`, { username });
   }
 
   // Match endpoints
