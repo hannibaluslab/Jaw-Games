@@ -6,6 +6,26 @@ const { ethers } = require('ethers');
 
 class UserController {
   /**
+   * List all players
+   */
+  static async listUsers(req, res) {
+    try {
+      const users = await User.findAll();
+      res.json({
+        players: users.map((u) => ({
+          id: u.id,
+          username: u.username,
+          ensName: u.ens_name,
+          smartAccountAddress: u.smart_account_address,
+        })),
+      });
+    } catch (error) {
+      console.error('List users error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
    * Get user profile by username
    */
   static async getUser(req, res) {
@@ -113,6 +133,31 @@ class UserController {
       res.json({ address: user.smart_account_address, balances });
     } catch (error) {
       console.error('Get user balance error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Get user profile by wallet address
+   */
+  static async getUserByAddress(req, res) {
+    try {
+      const { address } = req.params;
+
+      const user = await User.findByAddress(address);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.json({
+        id: user.id,
+        username: user.username,
+        ensName: user.ens_name,
+        smartAccountAddress: user.smart_account_address,
+        createdAt: user.created_at,
+      });
+    } catch (error) {
+      console.error('Get user by address error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

@@ -35,6 +35,12 @@ class User {
     return result.rows[0];
   }
 
+  static async findAll() {
+    const query = 'SELECT id, username, ens_name, smart_account_address, created_at FROM users ORDER BY created_at DESC';
+    const result = await db.query(query);
+    return result.rows;
+  }
+
   static async update(id, updates) {
     const fields = Object.keys(updates);
     const values = Object.values(updates);

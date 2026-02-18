@@ -17,6 +17,7 @@ function DashboardContent() {
   const [inviteCount, setInviteCount] = useState(0);
   const [matches, setMatches] = useState<any[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
+  const [players, setPlayers] = useState<{ id: string; username: string; ensName: string; smartAccountAddress: string }[]>([]);
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -24,15 +25,17 @@ function DashboardContent() {
       return;
     }
 
-    // Use stored username or derive from address
-    const storedUsername = localStorage.getItem('username') || address.slice(0, 8);
-    setUsername(storedUsername);
+    const init = async () => {
+      // Fetch username from backend by wallet address
+      const userRes = await api.getUserByAddress(address);
+      const resolvedUsername = userRes.data?.username || address.slice(0, 8);
+      setUsername(resolvedUsername);
 
-    // Fetch invites and matches
-    const fetchData = async () => {
-      const [invitesRes, matchesRes] = await Promise.all([
-        api.getPendingInvites(storedUsername),
-        api.getUserMatches(storedUsername),
+      // Fetch invites, matches, and players in parallel
+      const [invitesRes, matchesRes, playersRes] = await Promise.all([
+        api.getPendingInvites(resolvedUsername),
+        api.getUserMatches(resolvedUsername),
+        api.listPlayers(),
       ]);
 
       if (invitesRes.data) {
@@ -41,10 +44,18 @@ function DashboardContent() {
       if (matchesRes.data) {
         setMatches(matchesRes.data.matches || []);
       }
+      if (playersRes.data) {
+        // Exclude current user from the players list
+        setPlayers(
+          (playersRes.data.players || []).filter(
+            (p) => p.smartAccountAddress.toLowerCase() !== address.toLowerCase()
+          )
+        );
+      }
       setMatchesLoading(false);
     };
 
-    fetchData();
+    init();
   }, [api, router, isConnected, address]);
 
   const handleSignOut = () => {
@@ -110,6 +121,36 @@ function DashboardContent() {
               </div>
             )}
           </button>
+        </div>
+
+        {/* Players */}
+        <div className="mt-12">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Players</h3>
+          {players.length === 0 ? (
+            <div className="bg-white rounded-xl shadow p-6">
+              <p className="text-gray-500 text-center py-4">No other players yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {players.map((player) => (
+                <div
+                  key={player.id}
+                  className="bg-white rounded-lg shadow p-4 flex items-center justify-between"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900">{player.username}</p>
+                    <p className="text-xs text-gray-500">{player.ensName}</p>
+                  </div>
+                  <button
+                    onClick={() => router.push(`/create-match?opponent=${player.username}`)}
+                    className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+                  >
+                    Challenge
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Recent Matches */}

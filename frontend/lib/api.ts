@@ -73,12 +73,20 @@ export class ApiClient {
     return this.get(`/api/users/${username}`);
   }
 
+  async getUserByAddress(address: string): Promise<ApiResponse<{ id: string; username: string; ensName: string; smartAccountAddress: string }>> {
+    return this.get(`/api/users/address/${address}`);
+  }
+
   async checkUsername(username: string): Promise<ApiResponse<{ username: string; available: boolean; ensName: string }>> {
     return this.get(`/api/users/${username}/check`);
   }
 
   async getUserMatches(username: string): Promise<ApiResponse<{ matches: any[] }>> {
     return this.get(`/api/users/${username}/matches`);
+  }
+
+  async listPlayers(): Promise<ApiResponse<{ players: { id: string; username: string; ensName: string; smartAccountAddress: string }[] }>> {
+    return this.get('/api/users');
   }
 
   // Match endpoints
