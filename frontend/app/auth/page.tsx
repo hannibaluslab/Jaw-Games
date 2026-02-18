@@ -3,38 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAccount, useConnect } from 'wagmi';
-import { Account } from '@jaw.id/core';
-import { useApi } from '@/lib/hooks/useApi';
 
 export default function AuthPage() {
   const router = useRouter();
-  const api = useApi();
   const { isConnected, address } = useAccount();
   const { connect, connectors, isPending, error: connectError } = useConnect();
 
   const [error, setError] = useState<string | null>(null);
-  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
-    if (!isConnected || !address || registering) return;
-
-    const registerAndRedirect = async () => {
-      setRegistering(true);
-      try {
-        // Get the username claimed in the JAW modal
-        const jawAccount = Account.getCurrentAccount(process.env.NEXT_PUBLIC_JAW_API_KEY);
-        const jawUsername = jawAccount?.username || null;
-
-        // Register/fetch user with the JAW-claimed username
-        await api.getUserByAddress(address, jawUsername);
-      } catch (e) {
-        // Non-blocking: dashboard will handle fallback
-      }
+    if (isConnected && address) {
       router.push('/dashboard');
-    };
-
-    registerAndRedirect();
-  }, [isConnected, address, router, api, registering]);
+    }
+  }, [isConnected, address, router]);
 
   useEffect(() => {
     if (connectError) {

@@ -143,42 +143,33 @@ class UserController {
   static async getUserByAddress(req, res) {
     try {
       const { address } = req.params;
-      const jawUsername = req.query.username || null;
 
       let user = await User.findByAddress(address);
 
+      // Resolve the JAW-claimed username via JustaName API
+      let jawUsername = null;
+      try {
+        const ensName = await ENSService.reverseResolve(address);
+        if (ensName) {
+          const match = ensName.match(/^(.+)\.lafung\.eth$/i);
+          if (match) jawUsername = match[1];
+        }
+      } catch (e) {
+        // JustaName lookup failed
+      }
+
       // Auto-register new users on first lookup
       if (!user) {
-        // Use the JAW-claimed username if provided
-        let username = jawUsername;
-
-        // Fallback: try ENS reverse resolution
-        if (!username) {
-          try {
-            const ensName = await ENSService.reverseResolve(address);
-            if (ensName) {
-              const match = ensName.match(/^(.+)\.lafung\.eth$/i);
-              if (match) username = match[1];
-            }
-          } catch (e) {
-            // ENS lookup failed, fall back to address-based name
-          }
-        }
-
-        if (!username) {
-          username = `player_${address.slice(2, 8).toLowerCase()}`;
-        }
+        const username = jawUsername || `player_${address.slice(2, 8).toLowerCase()}`;
 
         // Ensure username is unique
         const existing = await User.findByUsername(username);
-        if (existing) {
-          username = `${username}_${Date.now().toString(36)}`;
-        }
+        const finalUsername = existing ? `${username}_${Date.now().toString(36)}` : username;
 
-        const ensName = `${username}.lafung.eth`;
-        user = await User.create(username, ensName, address);
+        const ensName = `${finalUsername}.lafung.eth`;
+        user = await User.create(finalUsername, ensName, address);
       } else if (jawUsername && user.username.startsWith('player_') && jawUsername !== user.username) {
-        // User exists with auto-generated name but JAW now provides their real username
+        // Existing user has auto-generated name but JustaName has their real username — fix it
         const existing = await User.findByUsername(jawUsername);
         if (!existing || existing.id === user.id) {
           const ensName = `${jawUsername}.lafung.eth`;

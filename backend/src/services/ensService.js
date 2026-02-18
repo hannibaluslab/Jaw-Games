@@ -18,16 +18,26 @@ class ENSService {
   }
 
   /**
-   * Reverse resolve address to ENS name
+   * Reverse resolve address to ENS name via JustaName API
    * @param {string} address - Ethereum address
    * @returns {string|null} - ENS name or null
    */
   static async reverseResolve(address) {
     try {
-      const name = await provider.lookupAddress(address);
-      return name;
+      const res = await fetch(
+        `https://api.justaname.id/ens/v1/subname/address?address=${address}&chainId=1`
+      );
+      const json = await res.json();
+      const subnames = json?.result?.data?.subnames;
+      if (Array.isArray(subnames) && subnames.length > 0) {
+        // Find the lafung.eth subname specifically
+        const jawSubname = subnames.find(s => s.ens && s.ens.endsWith('.lafung.eth'));
+        if (jawSubname) return jawSubname.ens;
+        return subnames[0].ens;
+      }
+      return null;
     } catch (error) {
-      console.error('Reverse ENS resolution error:', error);
+      console.error('JustaName reverse resolution error:', error);
       return null;
     }
   }
