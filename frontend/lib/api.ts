@@ -80,8 +80,9 @@ export class ApiClient {
     return this.get(`/api/users/${username}`);
   }
 
-  async getUserByAddress(address: string): Promise<ApiResponse<{ id: string; username: string; ensName: string; smartAccountAddress: string }>> {
-    return this.get(`/api/users/address/${address}`);
+  async getUserByAddress(address: string, username?: string | null): Promise<ApiResponse<{ id: string; username: string; ensName: string; smartAccountAddress: string }>> {
+    const params = username ? `?username=${encodeURIComponent(username)}` : '';
+    return this.get(`/api/users/address/${address}${params}`);
   }
 
   async checkUsername(username: string): Promise<ApiResponse<{ username: string; available: boolean; ensName: string }>> {

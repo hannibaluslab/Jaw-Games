@@ -143,20 +143,26 @@ class UserController {
   static async getUserByAddress(req, res) {
     try {
       const { address } = req.params;
+      const jawUsername = req.query.username || null;
 
       let user = await User.findByAddress(address);
 
       // Auto-register new users on first lookup
       if (!user) {
-        let username = null;
-        try {
-          const ensName = await ENSService.reverseResolve(address);
-          if (ensName) {
-            const match = ensName.match(/^(.+)\.lafung\.eth$/i);
-            if (match) username = match[1];
+        // Use the JAW-claimed username if provided
+        let username = jawUsername;
+
+        // Fallback: try ENS reverse resolution
+        if (!username) {
+          try {
+            const ensName = await ENSService.reverseResolve(address);
+            if (ensName) {
+              const match = ensName.match(/^(.+)\.lafung\.eth$/i);
+              if (match) username = match[1];
+            }
+          } catch (e) {
+            // ENS lookup failed, fall back to address-based name
           }
-        } catch (e) {
-          // ENS lookup failed, fall back to address-based name
         }
 
         if (!username) {
@@ -171,6 +177,13 @@ class UserController {
 
         const ensName = `${username}.lafung.eth`;
         user = await User.create(username, ensName, address);
+      } else if (jawUsername && user.username.startsWith('player_') && jawUsername !== user.username) {
+        // User exists with auto-generated name but JAW now provides their real username
+        const existing = await User.findByUsername(jawUsername);
+        if (!existing || existing.id === user.id) {
+          const ensName = `${jawUsername}.lafung.eth`;
+          user = await User.update(user.id, { username: jawUsername, ens_name: ensName });
+        }
       }
 
       res.json({
