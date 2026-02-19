@@ -37,10 +37,66 @@ export default function BetDetailPage() {
   const [newJudgeUsername, setNewJudgeUsername] = useState('');
   const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
 
+  // Edit mode state
+  const [editing, setEditing] = useState(false);
+  const [editStatement, setEditStatement] = useState('');
+  const [editRules, setEditRules] = useState('');
+  const [editOutcomes, setEditOutcomes] = useState<string[]>([]);
+  const [editBettingDeadline, setEditBettingDeadline] = useState('');
+  const [editResolveDate, setEditResolveDate] = useState('');
+  const [saveLoading, setSaveLoading] = useState(false);
+
   const { sendCalls, isPending: isTxPending } = useSendCalls();
 
   const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
   const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+
+  const toLocalDatetimeStr = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const startEditing = () => {
+    if (!bet) return;
+    const outcomes = typeof bet.outcomes === 'string' ? JSON.parse(bet.outcomes) : bet.outcomes;
+    setEditStatement(bet.statement || '');
+    setEditRules(bet.rules || '');
+    setEditOutcomes([...outcomes]);
+    setEditBettingDeadline(toLocalDatetimeStr(new Date(bet.betting_deadline)));
+    setEditResolveDate(toLocalDatetimeStr(new Date(bet.resolve_date)));
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setSaveLoading(true);
+    setError(null);
+    const updates: any = {};
+    if (editStatement !== bet.statement) updates.statement = editStatement;
+    if ((editRules || null) !== (bet.rules || null)) updates.rules = editRules || null;
+    const currentOutcomes = typeof bet.outcomes === 'string' ? JSON.parse(bet.outcomes) : bet.outcomes;
+    if (JSON.stringify(editOutcomes) !== JSON.stringify(currentOutcomes)) updates.outcomes = editOutcomes;
+    const newBD = new Date(editBettingDeadline).toISOString();
+    const oldBD = new Date(bet.betting_deadline).toISOString();
+    if (newBD !== oldBD) updates.bettingDeadline = editBettingDeadline;
+    const newRD = new Date(editResolveDate).toISOString();
+    const oldRD = new Date(bet.resolve_date).toISOString();
+    if (newRD !== oldRD) updates.resolveDate = editResolveDate;
+
+    if (Object.keys(updates).length === 0) {
+      setEditing(false);
+      setSaveLoading(false);
+      return;
+    }
+
+    const res = await api.editBet(betId, updates);
+    if (res.error) {
+      setError(res.error);
+    } else {
+      setEditing(false);
+      fetchBet();
+    }
+    setSaveLoading(false);
+  };
 
   useEffect(() => {
     if (status === 'connecting' || status === 'reconnecting') return;
@@ -318,13 +374,123 @@ export default function BetDetailPage() {
         <div className="bg-white rounded-xl shadow-lg p-5 sm:p-8">
           <div className="flex items-start justify-between gap-3 mb-4">
             <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-snug">{bet.statement}</h1>
-            <span className={`text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${statusColors[bet.status] || 'bg-gray-100'}`}>
-              {bet.status}
-            </span>
+            <div className="flex items-center gap-2">
+              {isCreator && isDraft && !editing && (
+                <button
+                  onClick={startEditing}
+                  className="text-xs px-3 py-1 rounded-full font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 transition"
+                >
+                  Edit
+                </button>
+              )}
+              <span className={`text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${statusColors[bet.status] || 'bg-gray-100'}`}>
+                {bet.status}
+              </span>
+            </div>
           </div>
           {bet.rules && <p className="text-gray-600 text-sm mb-4">{bet.rules}</p>}
           <p className="text-xs text-gray-400">Created by {bet.creator_username}</p>
         </div>
+
+        {/* Edit form (creator, draft only) */}
+        {editing && (
+          <div className="bg-white rounded-xl shadow-lg p-5 sm:p-8 space-y-5 border-2 border-teal-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-teal-700 uppercase tracking-wide">Edit Bet</h2>
+              <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+            </div>
+
+            {/* Statement */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Statement</label>
+              <textarea
+                value={editStatement}
+                onChange={(e) => setEditStatement(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Rules */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rules / clarification (optional)</label>
+              <textarea
+                value={editRules}
+                onChange={(e) => setEditRules(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Outcomes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Outcomes</label>
+              <div className="space-y-2">
+                {editOutcomes.map((o, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={o}
+                      onChange={(e) => {
+                        const updated = [...editOutcomes];
+                        updated[i] = e.target.value;
+                        setEditOutcomes(updated);
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                    {editOutcomes.length > 2 && (
+                      <button
+                        onClick={() => setEditOutcomes(editOutcomes.filter((_, j) => j !== i))}
+                        className="text-red-400 hover:text-red-600 text-sm px-2"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setEditOutcomes([...editOutcomes, ''])}
+                className="mt-2 text-xs text-teal-600 hover:text-teal-700 font-medium"
+              >
+                + Add outcome
+              </button>
+            </div>
+
+            {/* Betting deadline */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Betting deadline</label>
+              <p className="text-xs text-gray-400 mb-1">Last date and time people can join and place their bets</p>
+              <input
+                type="datetime-local"
+                value={editBettingDeadline}
+                onChange={(e) => setEditBettingDeadline(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Resolve date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resolve date</label>
+              <p className="text-xs text-gray-400 mb-1">When the event should have happened. Judges will vote after this date</p>
+              <input
+                type="datetime-local"
+                value={editResolveDate}
+                onChange={(e) => setEditResolveDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Save */}
+            <button
+              onClick={handleSaveEdit}
+              disabled={saveLoading || !editStatement.trim() || editOutcomes.some(o => !o.trim()) || editOutcomes.length < 2}
+              className="w-full bg-teal-500 text-white py-3 rounded-lg font-semibold hover:bg-teal-600 transition disabled:opacity-50"
+            >
+              {saveLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        )}
 
         {/* Outcomes */}
         <div className="bg-white rounded-xl shadow p-5">
