@@ -49,11 +49,29 @@ export default function MatchDetailsPage() {
   const isPlayerB = match && currentUsername === match.player_b_username;
   const myDeposited = isPlayerA ? match?.player_a_deposited : match?.player_b_deposited;
 
-  // Accept + deposit via wallet popup (sendCalls must be synchronous from click)
+  // Accept + deposit via session API (no popup) or wallet popup
   const handleAcceptAndDeposit = () => {
     setAction('accepting');
     setError(null);
 
+    // Session path: no wallet popup
+    if (hasSession) {
+      api.acceptMatchViaSession(matchId).then((response) => {
+        if (response.error) {
+          setError(response.error);
+          setAction('idle');
+        } else {
+          setAction('idle');
+          router.push(`/matches/${encodeURIComponent(matchId)}/play`);
+        }
+      }).catch((err: any) => {
+        setError(err.message || 'Session accept failed');
+        setAction('idle');
+      });
+      return;
+    }
+
+    // Wallet popup path: sendCalls must be synchronous from click
     sendCalls({
       calls: [
         {

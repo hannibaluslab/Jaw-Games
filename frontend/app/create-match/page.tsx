@@ -63,6 +63,31 @@ function CreateMatchContent() {
     const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
 
     setError(null);
+
+    // Session path: no wallet popup, all async is fine
+    if (hasSession) {
+      setStep('saving');
+      api.createMatchViaSession({
+        gameId: 'tictactoe',
+        opponentUsername,
+        stakeAmount: stakeAmountParsed.toString(),
+        token: tokenInfo.address,
+      }).then((response) => {
+        if (response.error) {
+          setError(response.error);
+          setStep('form');
+        } else {
+          setStep('done');
+          router.push(`/matches/${encodeURIComponent(response.data!.matchId)}`);
+        }
+      }).catch((err: any) => {
+        setError(err.message || 'Session create failed');
+        setStep('form');
+      });
+      return;
+    }
+
+    // Wallet popup path: sendCalls must be synchronous from click
     setStep('signing');
 
     const matchId = keccak256(toHex(`match-${crypto.randomUUID()}-${Date.now()}`));
