@@ -31,17 +31,18 @@ export default function BetsPage() {
   }, [isConnected, status, router, api]);
 
   useEffect(() => {
+    let isFirst = true;
     const fetchBets = async () => {
-      setLoading(true);
+      if (isFirst) setLoading(true);
       const response = await api.listBets(tab);
       if (response.data) {
         setBets(response.data.bets || []);
       }
-      setLoading(false);
+      if (isFirst) { setLoading(false); isFirst = false; }
     };
 
     fetchBets();
-    const interval = setInterval(fetchBets, 5000);
+    const interval = setInterval(fetchBets, 30000);
     return () => clearInterval(interval);
   }, [api, tab]);
 

@@ -110,7 +110,7 @@ export default function BetDetailPage() {
     }
   }, [isConnected, status, router, api, userId]);
 
-  const fetchBet = async () => {
+  const fetchBet = async (initial = false) => {
     const response = await api.getBet(betId);
     if (response.data) {
       setBet(response.data.bet);
@@ -118,12 +118,12 @@ export default function BetDetailPage() {
       setOutcomeCounts(response.data.outcomeCounts || []);
       setEvents(response.data.events || []);
     }
-    setLoading(false);
+    if (initial) setLoading(false);
   };
 
   useEffect(() => {
-    fetchBet();
-    const interval = setInterval(fetchBet, 5000);
+    fetchBet(true);
+    const interval = setInterval(() => fetchBet(false), 15000);
     return () => clearInterval(interval);
   }, [betId]);
 
