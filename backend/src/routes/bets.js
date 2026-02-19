@@ -16,6 +16,12 @@ router.get('/invites/judges', authMiddleware, BetController.getPendingJudgeInvit
 // Get bet details (public)
 router.get('/:betId', BetController.getBet);
 
+// Edit draft bet (requires auth)
+router.put('/:betId', authMiddleware, BetController.editBet);
+
+// Replace a judge on draft bet (requires auth)
+router.post('/:betId/judges/replace', authMiddleware, BetController.replaceJudge);
+
 // Place a bet (requires auth)
 router.post('/:betId/join', authMiddleware, BetController.placeBet);
 

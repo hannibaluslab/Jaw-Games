@@ -3,7 +3,7 @@
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useAccount, useSendCalls } from 'wagmi';
-import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
+import { formatUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import {
   BET_SETTLER_CONTRACT_ADDRESS,
@@ -31,6 +31,11 @@ export default function BetDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Replace judge state
+  const [replacingJudge, setReplacingJudge] = useState<string | null>(null);
+  const [newJudgeUsername, setNewJudgeUsername] = useState('');
+  const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
 
   const { sendCalls, isPending: isTxPending } = useSendCalls();
 
@@ -65,6 +70,15 @@ export default function BetDetailPage() {
     return () => clearInterval(interval);
   }, [betId]);
 
+  // Load players list when creator needs to replace a judge
+  useEffect(() => {
+    if (replacingJudge) {
+      api.listPlayers().then((res) => {
+        if (res.data?.players) setPlayers(res.data.players);
+      });
+    }
+  }, [replacingJudge, api]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500">
@@ -95,6 +109,7 @@ export default function BetDetailPage() {
   const bettors = participants.filter((p) => p.role === 'bettor');
   const myParticipation = participants.find((p) => p.username === username);
   const isCreator = bet.creator_username === username;
+  const isDraft = bet.status === 'draft';
 
   const getCountForOutcome = (outcomeIndex: number) => {
     const found = outcomeCounts.find((c) => parseInt(c.outcome) === outcomeIndex);
@@ -240,13 +255,35 @@ export default function BetDetailPage() {
     fetchBet();
   };
 
+  const handleReplaceJudge = async (oldJudge: string) => {
+    if (!newJudgeUsername) return;
+    setActionLoading(true);
+    setError(null);
+    const res = await api.replaceJudge(betId, oldJudge, newJudgeUsername);
+    if (res.error) {
+      setError(res.error);
+    } else {
+      setReplacingJudge(null);
+      setNewJudgeUsername('');
+    }
+    setActionLoading(false);
+    fetchBet();
+  };
+
   // Determine which actions to show
   const canBet = bet.status === 'open' && !myParticipation && new Date(bet.betting_deadline) > new Date();
-  const isJudgePending = myParticipation?.role === 'judge' && myParticipation?.invite_status === 'pending' && bet.status === 'draft';
+  const isJudgePending = myParticipation?.role === 'judge' && myParticipation?.invite_status === 'pending' && isDraft;
   const canVote = bet.status === 'judging' && myParticipation?.role === 'judge' && myParticipation?.vote === null;
   const canClaim = bet.status === 'settled' && myParticipation?.role === 'bettor' && myParticipation?.outcome === bet.winning_outcome && !myParticipation?.claimed;
   const canRefund = ['cancelled', 'refunded', 'expired'].includes(bet.status) && myParticipation?.role === 'bettor' && myParticipation?.deposited && !myParticipation?.claimed;
   const canCancel = isCreator && ['draft', 'open'].includes(bet.status);
+  const canReplaceJudges = isCreator && isDraft;
+
+  // Players available as replacement judges
+  const currentJudgeUsernames = judges.map((j: any) => j.username);
+  const availableReplacements = players.filter(
+    (p) => p.username !== username && !currentJudgeUsernames.includes(p.username)
+  );
 
   const statusColors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700',
@@ -365,19 +402,60 @@ export default function BetDetailPage() {
         <div className="bg-white rounded-xl shadow p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Judges</h2>
           <div className="space-y-2">
-            {judges.map((judge) => (
-              <div key={judge.user_id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                <span className="font-medium text-gray-900">{judge.username}</span>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  judge.invite_status === 'accepted' ? 'bg-green-100 text-green-700' :
-                  judge.invite_status === 'declined' ? 'bg-red-100 text-red-700' :
-                  'bg-yellow-100 text-yellow-700'
-                }`}>
-                  {judge.vote !== null ? 'Voted' : judge.invite_status}
-                </span>
+            {judges.map((judge: any) => (
+              <div key={judge.user_id} className="py-2 border-b border-gray-100 last:border-0">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">{judge.username}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      judge.invite_status === 'accepted' ? 'bg-green-100 text-green-700' :
+                      judge.invite_status === 'declined' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {judge.vote !== null ? 'Voted' : judge.invite_status}
+                    </span>
+                    {canReplaceJudges && (
+                      <button
+                        onClick={() => {
+                          setReplacingJudge(replacingJudge === judge.username ? null : judge.username);
+                          setNewJudgeUsername('');
+                        }}
+                        className="text-xs text-gray-400 hover:text-teal-600 font-medium"
+                      >
+                        {replacingJudge === judge.username ? 'Cancel' : 'Replace'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Replace judge inline form */}
+                {replacingJudge === judge.username && (
+                  <div className="mt-2 flex gap-2">
+                    <select
+                      value={newJudgeUsername}
+                      onChange={(e) => setNewJudgeUsername(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    >
+                      <option value="">Select replacement...</option>
+                      {availableReplacements.map((p) => (
+                        <option key={p.username} value={p.username}>{p.username}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleReplaceJudge(judge.username)}
+                      disabled={!newJudgeUsername || actionLoading}
+                      className="px-4 py-2 bg-teal-500 text-white text-sm rounded-lg font-medium hover:bg-teal-600 transition disabled:opacity-50"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
+          {canReplaceJudges && judges.some((j: any) => j.invite_status === 'declined') && (
+            <p className="text-xs text-orange-600 mt-3">Some judges declined. Replace them to proceed.</p>
+          )}
         </div>
 
         {/* Countdown */}

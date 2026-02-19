@@ -40,8 +40,8 @@ class BetController {
         return res.status(400).json({ error: 'At least 2 outcomes required' });
       }
 
-      if (!Array.isArray(judgeUsernames) || judgeUsernames.length < 3 || judgeUsernames.length % 2 === 0) {
-        return res.status(400).json({ error: 'Judges must be an odd number >= 3' });
+      if (!Array.isArray(judgeUsernames) || judgeUsernames.length < 2 || judgeUsernames.length % 2 === 0) {
+        return res.status(400).json({ error: 'Judges must be an odd number >= 2' });
       }
 
       const creator = await User.findById(userId);
@@ -318,18 +318,18 @@ class BetController {
         username: user?.username,
       });
 
-      // If a judge declined, cancel the bet
+      // If a judge declined, notify but don't cancel — creator can replace
       if (response === 'declined') {
-        await Bet.updateStatus(betId, 'cancelled');
-        await BetEvent.create(bet.id, 'cancelled', null, { reason: 'Judge declined invitation' });
-        return res.json({ message: 'Judge declined. Bet cancelled.' });
+        return res.json({ message: 'Judge declined. The creator can replace this judge.' });
       }
 
-      // Check if all judges accepted → move to open
-      const totalJudges = await BetParticipant.countTotalJudges(bet.id);
-      const acceptedJudges = await BetParticipant.countAcceptedJudges(bet.id);
+      // Check if all judges accepted (no pending or declined) → move to open
+      const judges = await BetParticipant.findJudgesByBetId(bet.id);
+      const allAccepted = judges.length >= 2 && judges.every(j => j.invite_status === 'accepted');
+      const totalJudges = judges.length;
+      const acceptedJudges = judges.filter(j => j.invite_status === 'accepted').length;
 
-      if (acceptedJudges === totalJudges) {
+      if (allAccepted) {
         // Create the bet on-chain via relayer
         if (betSettlerContract) {
           try {
@@ -483,6 +483,138 @@ class BetController {
       res.json({ message: 'Winnings claimed successfully' });
     } catch (error) {
       console.error('Claim winnings error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Edit a draft bet (creator only)
+   */
+  static async editBet(req, res) {
+    try {
+      const { betId } = req.params;
+      const { userId } = req.user;
+      const { statement, rules, outcomes, stakeAmount, token, bettingDeadline, resolveDate } = req.body;
+
+      const bet = await Bet.findByBetId(betId);
+      if (!bet) {
+        return res.status(404).json({ error: 'Bet not found' });
+      }
+
+      if (bet.creator_id !== userId) {
+        return res.status(403).json({ error: 'Only the creator can edit' });
+      }
+
+      if (bet.status !== 'draft') {
+        return res.status(400).json({ error: 'Only draft bets can be edited' });
+      }
+
+      const updates = {};
+      if (statement !== undefined) updates.statement = statement;
+      if (rules !== undefined) updates.rules = rules || null;
+      if (outcomes !== undefined) {
+        if (!Array.isArray(outcomes) || outcomes.length < 2) {
+          return res.status(400).json({ error: 'At least 2 outcomes required' });
+        }
+        updates.outcomes = JSON.stringify(outcomes);
+      }
+      if (stakeAmount !== undefined) updates.stake_amount = stakeAmount;
+      if (token !== undefined) updates.token_address = token;
+      if (bettingDeadline !== undefined) {
+        updates.betting_deadline = new Date(bettingDeadline);
+      }
+      if (resolveDate !== undefined) {
+        const rd = new Date(resolveDate);
+        updates.resolve_date = rd;
+        updates.judge_deadline = new Date(rd.getTime() + 7 * 24 * 60 * 60 * 1000);
+        updates.settle_by = new Date(rd.getTime() + 30 * 24 * 60 * 60 * 1000);
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      await Bet.update(betId, updates);
+      await BetEvent.create(bet.id, 'edited', userId, { fields: Object.keys(updates) });
+
+      const updated = await Bet.findByBetId(betId);
+      res.json({ bet: updated, message: 'Bet updated.' });
+    } catch (error) {
+      console.error('Edit bet error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * Replace a judge on a draft bet (creator only)
+   */
+  static async replaceJudge(req, res) {
+    try {
+      const { betId } = req.params;
+      const { oldJudgeUsername, newJudgeUsername } = req.body;
+      const { userId } = req.user;
+
+      if (!oldJudgeUsername || !newJudgeUsername) {
+        return res.status(400).json({ error: 'Both oldJudgeUsername and newJudgeUsername are required' });
+      }
+
+      const bet = await Bet.findByBetId(betId);
+      if (!bet) {
+        return res.status(404).json({ error: 'Bet not found' });
+      }
+
+      if (bet.creator_id !== userId) {
+        return res.status(403).json({ error: 'Only the creator can replace judges' });
+      }
+
+      if (bet.status !== 'draft') {
+        return res.status(400).json({ error: 'Judges can only be replaced while bet is in draft' });
+      }
+
+      // Find old judge
+      const oldJudge = await User.findByUsername(oldJudgeUsername);
+      if (!oldJudge) {
+        return res.status(404).json({ error: `User not found: ${oldJudgeUsername}` });
+      }
+
+      const oldParticipant = await BetParticipant.findByBetAndUser(bet.id, oldJudge.id);
+      if (!oldParticipant || oldParticipant.role !== 'judge') {
+        return res.status(400).json({ error: `${oldJudgeUsername} is not a judge for this bet` });
+      }
+
+      // Find new judge
+      const newJudge = await User.findByUsername(newJudgeUsername);
+      if (!newJudge) {
+        return res.status(404).json({ error: `User not found: ${newJudgeUsername}` });
+      }
+
+      if (newJudge.id === userId) {
+        return res.status(400).json({ error: 'Creator cannot be a judge' });
+      }
+
+      // Check new judge isn't already a participant
+      const existingParticipant = await BetParticipant.findByBetAndUser(bet.id, newJudge.id);
+      if (existingParticipant) {
+        return res.status(400).json({ error: `${newJudgeUsername} is already a participant` });
+      }
+
+      // Remove old judge and add new one
+      await BetParticipant.remove(bet.id, oldJudge.id);
+      await BetParticipant.create({
+        betId: bet.id,
+        userId: newJudge.id,
+        role: 'judge',
+        inviteStatus: 'pending',
+      });
+
+      await BetEvent.create(bet.id, 'judge_replaced', userId, {
+        oldJudge: oldJudgeUsername,
+        newJudge: newJudgeUsername,
+      });
+
+      res.json({ message: `Replaced ${oldJudgeUsername} with ${newJudgeUsername}.` });
+    } catch (error) {
+      console.error('Replace judge error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

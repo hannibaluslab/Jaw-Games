@@ -142,6 +142,24 @@ class Bet {
     return result.rows[0];
   }
 
+  static async update(betId, fields) {
+    const keys = Object.keys(fields);
+    if (keys.length === 0) return null;
+
+    const setClauses = keys.map((k, i) => `${k} = $${i + 1}`);
+    const values = keys.map((k) => fields[k]);
+
+    const query = `
+      UPDATE bets
+      SET ${setClauses.join(', ')}
+      WHERE bet_id = $${keys.length + 1}
+      RETURNING *
+    `;
+
+    const result = await db.query(query, [...values, betId]);
+    return result.rows[0];
+  }
+
   static async settle(betId, winningOutcome, txHash) {
     const query = `
       UPDATE bets

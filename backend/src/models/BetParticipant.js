@@ -162,6 +162,14 @@ class BetParticipant {
     return result.rows;
   }
 
+  static async remove(betInternalId, userId) {
+    const query = `
+      DELETE FROM bet_participants
+      WHERE bet_id = $1 AND user_id = $2
+    `;
+    await db.query(query, [betInternalId, userId]);
+  }
+
   static async countAcceptedJudges(betInternalId) {
     const query = `
       SELECT COUNT(*) as count

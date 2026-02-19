@@ -220,6 +220,14 @@ export class ApiClient {
     return this.post(`/api/bets/${betId}/vote`, { vote });
   }
 
+  async editBet(betId: string, data: Record<string, any>): Promise<ApiResponse<{ bet: any; message: string }>> {
+    return this.put(`/api/bets/${betId}`, data);
+  }
+
+  async replaceJudge(betId: string, oldJudgeUsername: string, newJudgeUsername: string): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/judges/replace`, { oldJudgeUsername, newJudgeUsername });
+  }
+
   async cancelBet(betId: string): Promise<ApiResponse<{ message: string }>> {
     return this.post(`/api/bets/${betId}/cancel`, {});
   }

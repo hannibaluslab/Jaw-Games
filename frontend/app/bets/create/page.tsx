@@ -13,6 +13,11 @@ import {
 
 type Step = 'statement' | 'outcomes' | 'stake' | 'window' | 'judges' | 'review' | 'saving' | 'done';
 
+function toLocalDatetimeStr(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function CreateBetContent() {
   const router = useRouter();
   const api = useApi();
@@ -27,9 +32,13 @@ function CreateBetContent() {
   const [outcomes, setOutcomes] = useState(['Yes', 'No']);
   const [stakeAmount, setStakeAmount] = useState('5');
   const [token, setToken] = useState<'USDC' | 'USDT'>('USDC');
-  const [bettingDeadlineDays, setBettingDeadlineDays] = useState(3);
-  const [resolveAfterDays, setResolveAfterDays] = useState(7);
-  const [judgeUsernames, setJudgeUsernames] = useState<string[]>(['', '', '']);
+  const [bettingDeadlineStr, setBettingDeadlineStr] = useState(() =>
+    toLocalDatetimeStr(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000))
+  );
+  const [resolveDateStr, setResolveDateStr] = useState(() =>
+    toLocalDatetimeStr(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
+  );
+  const [judgeUsernames, setJudgeUsernames] = useState<string[]>(['', '']);
   const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -51,9 +60,6 @@ function CreateBetContent() {
   }, [isConnected, status, router, api]);
 
   const myUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
-  const availableJudges = players.filter(
-    (p) => p.username !== myUsername && !judgeUsernames.includes(p.username)
-  );
 
   const addOutcome = () => setOutcomes([...outcomes, '']);
   const removeOutcome = (i: number) => {
@@ -68,7 +74,7 @@ function CreateBetContent() {
 
   const addJudge = () => setJudgeUsernames([...judgeUsernames, '']);
   const removeJudge = (i: number) => {
-    if (judgeUsernames.length <= 3) return;
+    if (judgeUsernames.length <= 2) return;
     setJudgeUsernames(judgeUsernames.filter((_, idx) => idx !== i));
   };
   const updateJudge = (i: number, val: string) => {
@@ -78,18 +84,20 @@ function CreateBetContent() {
   };
 
   const validJudges = judgeUsernames.filter((u) => u && players.some((p) => p.username === u));
-  const isOddJudges = validJudges.length >= 3 && validJudges.length % 2 === 1;
+  const isValidJudgeCount = validJudges.length >= 2 && validJudges.length % 2 === 1;
 
-  const bettingDeadline = new Date(Date.now() + bettingDeadlineDays * 24 * 60 * 60 * 1000);
-  const resolveDate = new Date(Date.now() + resolveAfterDays * 24 * 60 * 60 * 1000);
+  const bettingDeadline = new Date(bettingDeadlineStr);
+  const resolveDate = new Date(resolveDateStr);
+  const now = new Date();
+  const minDatetimeStr = toLocalDatetimeStr(new Date(Date.now() + 60 * 60 * 1000)); // at least 1h from now
 
   const canProceed = () => {
     switch (step) {
       case 'statement': return statement.trim().length >= 5;
       case 'outcomes': return outcomes.filter((o) => o.trim()).length >= 2;
       case 'stake': return Number(stakeAmount) >= MIN_STAKE;
-      case 'window': return bettingDeadlineDays >= 1 && resolveAfterDays > bettingDeadlineDays;
-      case 'judges': return isOddJudges;
+      case 'window': return bettingDeadline > now && resolveDate > bettingDeadline;
+      case 'judges': return isValidJudgeCount;
       case 'review': return true;
       default: return false;
     }
@@ -145,6 +153,9 @@ function CreateBetContent() {
   };
 
   const isProcessing = step === 'saving' || step === 'done';
+
+  const formatDatePreview = (d: Date) =>
+    d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -269,35 +280,53 @@ function CreateBetContent() {
 
           {/* Step: Window */}
           {step === 'window' && (
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700">Betting window (days from now)</label>
-              <input
-                type="number"
-                value={bettingDeadlineDays}
-                onChange={(e) => setBettingDeadlineDays(parseInt(e.target.value) || 1)}
-                min={1}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500">Betting closes: {bettingDeadline.toLocaleDateString()}</p>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Betting deadline</label>
+                <p className="text-xs text-gray-500 mb-2">Last date and time people can join and place their bets.</p>
+                <input
+                  type="datetime-local"
+                  value={bettingDeadlineStr}
+                  onChange={(e) => setBettingDeadlineStr(e.target.value)}
+                  min={minDatetimeStr}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+                {bettingDeadlineStr && (
+                  <p className="text-xs text-gray-400 mt-1">{formatDatePreview(bettingDeadline)}</p>
+                )}
+              </div>
 
-              <label className="block text-sm font-medium text-gray-700 mt-4">Resolve date (days from now)</label>
-              <input
-                type="number"
-                value={resolveAfterDays}
-                onChange={(e) => setResolveAfterDays(parseInt(e.target.value) || bettingDeadlineDays + 1)}
-                min={bettingDeadlineDays + 1}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500">Judges vote after: {resolveDate.toLocaleDateString()}</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Resolve date</label>
+                <p className="text-xs text-gray-500 mb-2">When the event should have happened. Judges will vote after this date.</p>
+                <input
+                  type="datetime-local"
+                  value={resolveDateStr}
+                  onChange={(e) => setResolveDateStr(e.target.value)}
+                  min={bettingDeadlineStr}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+                {resolveDateStr && (
+                  <p className="text-xs text-gray-400 mt-1">{formatDatePreview(resolveDate)}</p>
+                )}
+                {resolveDate <= bettingDeadline && (
+                  <p className="text-xs text-red-500 mt-1">Resolve date must be after the betting deadline.</p>
+                )}
+              </div>
             </div>
           )}
 
           {/* Step: Judges */}
           {step === 'judges' && (
             <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700">
-                Select judges (odd number, min 3)
-              </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Select judges (odd number, min 2)
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Judges decide the outcome after the resolve date. Pick an odd number to avoid ties. 3+ recommended.
+                </p>
+              </div>
               {judgeUsernames.map((u, i) => (
                 <div key={i} className="flex gap-2">
                   <select
@@ -314,12 +343,12 @@ function CreateBetContent() {
                         </option>
                       ))}
                   </select>
-                  {judgeUsernames.length > 3 && (
+                  {judgeUsernames.length > 2 && (
                     <button onClick={() => removeJudge(i)} className="text-gray-400 hover:text-gray-600 px-2">X</button>
                   )}
                 </div>
               ))}
-              {judgeUsernames.length % 2 === 0 && (
+              {validJudges.length >= 2 && validJudges.length % 2 === 0 && (
                 <p className="text-xs text-orange-600">Add one more judge to make an odd number.</p>
               )}
               <button
@@ -359,11 +388,11 @@ function CreateBetContent() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Betting closes</p>
-                    <p className="font-semibold">{bettingDeadline.toLocaleDateString()}</p>
+                    <p className="font-semibold">{formatDatePreview(bettingDeadline)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Resolve date</p>
-                    <p className="font-semibold">{resolveDate.toLocaleDateString()}</p>
+                    <p className="font-semibold">{formatDatePreview(resolveDate)}</p>
                   </div>
                 </div>
                 <div>
