@@ -67,14 +67,17 @@ function DashboardContent() {
       localStorage.setItem('userId', userRes.data.id);
       api.setAuthToken(userRes.data.id);
 
-      const [invitesRes, matchesRes, playersRes] = await Promise.all([
+      const [invitesRes, matchesRes, playersRes, judgeInvitesRes] = await Promise.all([
         api.getPendingInvites(resolvedUsername),
         api.getUserMatches(resolvedUsername),
         api.listPlayers(),
+        api.getPendingJudgeInvites(),
       ]);
 
       if (invitesRes.data) {
-        setInviteCount((invitesRes.data.invites || []).length);
+        const gameInvites = (invitesRes.data.invites || []).length;
+        const judgeInvites = (judgeInvitesRes.data?.invites || []).length;
+        setInviteCount(gameInvites + judgeInvites);
       }
       if (matchesRes.data) {
         setMatches(matchesRes.data.matches || []);
@@ -200,7 +203,7 @@ function DashboardContent() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           {/* Games Card */}
           <button
             onClick={() => router.push('/games')}
@@ -214,6 +217,22 @@ function DashboardContent() {
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">Play</h2>
                 <p className="text-blue-100 text-sm">Challenge someone to Tic-Tac-Toe</p>
+              </div>
+            </div>
+          </button>
+
+          {/* LifeBet Card */}
+          <button
+            onClick={() => router.push('/bets')}
+            className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
+          >
+            <div className="flex items-center">
+              <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold">LifeBet</h2>
+                <p className="text-red-100 text-sm">Bet on real life events</p>
               </div>
             </div>
           </button>

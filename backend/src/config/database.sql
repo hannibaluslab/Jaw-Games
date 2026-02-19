@@ -124,3 +124,93 @@ CREATE TRIGGER update_matches_updated_at BEFORE UPDATE ON matches
 -- JOIN users ua ON m.player_a_id = ua.id
 -- WHERE m.player_b_id = $1 AND m.status IN ('created', 'pending_creation')
 -- ORDER BY m.created_at DESC;
+
+-- =============================================
+-- LifeBet Tables
+-- =============================================
+
+-- Bets table
+CREATE TABLE bets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    bet_id VARCHAR(66) UNIQUE NOT NULL, -- bytes32 hex (on-chain ID)
+    creator_id UUID NOT NULL REFERENCES users(id),
+    statement TEXT NOT NULL,
+    rules TEXT,
+    outcomes JSONB NOT NULL, -- e.g. ["He will talk", "He won't talk"]
+    stake_amount BIGINT NOT NULL, -- per bettor (6 decimals)
+    token_address VARCHAR(42) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'draft',
+    visibility VARCHAR(20) NOT NULL DEFAULT 'public',
+    show_picks BOOLEAN DEFAULT FALSE,
+    min_bettors INT DEFAULT 2,
+    max_bettors INT DEFAULT 100,
+    betting_deadline TIMESTAMP NOT NULL,
+    resolve_date TIMESTAMP NOT NULL,
+    judge_deadline TIMESTAMP NOT NULL,
+    settle_by TIMESTAMP NOT NULL,
+    winning_outcome SMALLINT,
+    total_pool BIGINT DEFAULT 0,
+    settlement_tx_hash VARCHAR(66),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_bets_bet_id ON bets(bet_id);
+CREATE INDEX idx_bets_creator ON bets(creator_id);
+CREATE INDEX idx_bets_status ON bets(status);
+CREATE INDEX idx_bets_betting_deadline ON bets(betting_deadline);
+CREATE INDEX idx_bets_created_at ON bets(created_at DESC);
+
+-- Trigger for bets table
+CREATE TRIGGER update_bets_updated_at BEFORE UPDATE ON bets
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Bet participants table (bettors and judges)
+CREATE TABLE bet_participants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    bet_id UUID NOT NULL REFERENCES bets(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    role VARCHAR(20) NOT NULL, -- 'bettor' or 'judge'
+    outcome SMALLINT, -- 1-indexed (bettors pick)
+    vote SMALLINT, -- 1-indexed (judges vote)
+    invite_status VARCHAR(20) DEFAULT 'pending', -- pending/accepted/declined
+    deposited BOOLEAN DEFAULT FALSE,
+    claimed BOOLEAN DEFAULT FALSE,
+    claim_tx_hash VARCHAR(66),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(bet_id, user_id)
+);
+
+CREATE INDEX idx_bet_participants_bet ON bet_participants(bet_id);
+CREATE INDEX idx_bet_participants_user ON bet_participants(user_id);
+CREATE INDEX idx_bet_participants_role ON bet_participants(role);
+CREATE INDEX idx_bet_participants_invite ON bet_participants(invite_status);
+
+-- Trigger for bet_participants table
+CREATE TRIGGER update_bet_participants_updated_at BEFORE UPDATE ON bet_participants
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Bet events table (audit trail)
+CREATE TABLE bet_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    bet_id UUID NOT NULL REFERENCES bets(id),
+    event_type VARCHAR(50) NOT NULL, -- created/judge_invited/judge_accepted/bet_placed/locked/vote_cast/settled/cancelled
+    actor_id UUID REFERENCES users(id),
+    data JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_bet_events_bet ON bet_events(bet_id);
+CREATE INDEX idx_bet_events_type ON bet_events(event_type);
+
+-- Bet status values:
+-- 'draft' - Bet created, waiting for judges to accept
+-- 'open' - All judges accepted, betting window open
+-- 'locked' - Betting window closed, waiting for resolve date
+-- 'judging' - Resolve date passed, judges voting
+-- 'settled' - Winning outcome determined, winners can claim
+-- 'disputed' - Judges couldn't reach consensus
+-- 'cancelled' - Bet cancelled by creator or platform
+-- 'expired' - Not enough bettors or judges didn't accept
+-- 'refunded' - Emergency refund after settle_by deadline

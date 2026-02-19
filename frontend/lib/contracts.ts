@@ -24,8 +24,13 @@ export const TOKENS = {
   },
 } as const;
 
+export const BET_SETTLER_CONTRACT_ADDRESS = (process.env
+  .NEXT_PUBLIC_BET_SETTLER_CONTRACT_ADDRESS?.trim()) as Address;
+
 export const PLATFORM_FEE = 0.05;
 export const WINNER_SHARE = 1 - PLATFORM_FEE;
+export const LIFEBET_FEE = 0.05;
+export const LIFEBET_WINNER_SHARE = 1 - LIFEBET_FEE;
 export const MIN_STAKE = 1;
 export const ENS_DOMAIN = 'lafung.eth';
 export const BLOCK_EXPLORER_URL = 'https://sepolia.basescan.org';
@@ -93,6 +98,77 @@ export const ESCROW_ABI = [
           { name: 'settleBy', type: 'uint256' },
           { name: 'playerADeposited', type: 'bool' },
           { name: 'playerBDeposited', type: 'bool' },
+        ],
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+export const BET_SETTLER_ABI = [
+  {
+    inputs: [
+      { name: 'betId', type: 'bytes32' },
+      { name: 'stakeAmount', type: 'uint256' },
+      { name: 'token', type: 'address' },
+      { name: 'bettingDeadline', type: 'uint256' },
+      { name: 'settleBy', type: 'uint256' },
+    ],
+    name: 'createBet',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'betId', type: 'bytes32' },
+      { name: 'outcome', type: 'uint8' },
+    ],
+    name: 'placeBet',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'betId', type: 'bytes32' }],
+    name: 'claimWinnings',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'betId', type: 'bytes32' }],
+    name: 'claimRefund',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'betId', type: 'bytes32' }],
+    name: 'cancelBet',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'betId', type: 'bytes32' }],
+    name: 'bets',
+    outputs: [
+      {
+        components: [
+          { name: 'creator', type: 'address' },
+          { name: 'stakeAmount', type: 'uint256' },
+          { name: 'token', type: 'address' },
+          { name: 'status', type: 'uint8' },
+          { name: 'bettingDeadline', type: 'uint256' },
+          { name: 'settleBy', type: 'uint256' },
+          { name: 'winningOutcome', type: 'uint8' },
+          { name: 'totalPool', type: 'uint256' },
+          { name: 'feeCollected', type: 'uint256' },
+          { name: 'winnerPool', type: 'uint256' },
+          { name: 'winnerCount', type: 'uint256' },
         ],
         type: 'tuple',
       },

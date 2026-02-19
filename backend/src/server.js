@@ -2,6 +2,7 @@ const http = require('http');
 const app = require('./app');
 const { pool } = require('./config/database');
 const WebSocketService = require('./services/websocketService');
+const BetSchedulerService = require('./services/betSchedulerService');
 
 const PORT = process.env.PORT || 3001;
 
@@ -19,6 +20,10 @@ async function startServer() {
     console.log('✅ Database connected');
 
     // Start listening
+    // Start bet scheduler (every 60 seconds)
+    setInterval(() => BetSchedulerService.tick().catch(console.error), 60000);
+    console.log('✅ Bet scheduler started (60s interval)');
+
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`   HTTP: http://localhost:${PORT}`);

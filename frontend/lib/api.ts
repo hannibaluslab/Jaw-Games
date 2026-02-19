@@ -175,6 +175,62 @@ export class ApiClient {
   async acceptMatchViaSession(matchId: string): Promise<ApiResponse<{ txBatchId: string; message: string }>> {
     return this.post(`/api/matches/session/${matchId}/accept`);
   }
+
+  // Bet endpoints
+  async listBets(tab: string = 'open', limit: number = 20, offset: number = 0): Promise<ApiResponse<{ bets: any[] }>> {
+    return this.get(`/api/bets?tab=${tab}&limit=${limit}&offset=${offset}`);
+  }
+
+  async createBet(data: {
+    statement: string;
+    rules?: string;
+    outcomes: string[];
+    stakeAmount: string;
+    token: string;
+    bettingDeadline: string;
+    resolveDate: string;
+    judgeUsernames: string[];
+    betId?: string;
+    txHash?: string;
+    visibility?: string;
+    showPicks?: boolean;
+    minBettors?: number;
+    maxBettors?: number;
+  }): Promise<ApiResponse<{ betId: string; statement: string; outcomes: string[]; judges: string[]; deadlines: any; message: string }>> {
+    return this.post('/api/bets', data);
+  }
+
+  async getBet(betId: string): Promise<ApiResponse<{ bet: any; participants: any[]; outcomeCounts: any[]; events: any[] }>> {
+    return this.get(`/api/bets/${betId}`);
+  }
+
+  async placeBet(betId: string, data: { outcome: number; txHash?: string }): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/join`, data);
+  }
+
+  async confirmBetDeposit(betId: string, depositor: string, txHash: string): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/confirm-deposit`, { depositor, txHash });
+  }
+
+  async respondToJudgeInvite(betId: string, response: 'accepted' | 'declined'): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/judges/respond`, { response });
+  }
+
+  async castBetVote(betId: string, vote: number): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/vote`, { vote });
+  }
+
+  async cancelBet(betId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/cancel`, {});
+  }
+
+  async getPendingJudgeInvites(): Promise<ApiResponse<{ invites: any[] }>> {
+    return this.get('/api/bets/invites/judges');
+  }
+
+  async claimBetWinnings(betId: string, txHash?: string): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/bets/${betId}/claim`, { txHash });
+  }
 }
 
 export const apiClient = new ApiClient();

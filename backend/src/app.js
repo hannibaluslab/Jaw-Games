@@ -9,6 +9,7 @@ dotenv.config();
 const userRoutes = require('./routes/users');
 const matchRoutes = require('./routes/matches');
 const sessionRoutes = require('./routes/sessions');
+const betRoutes = require('./routes/bets');
 
 // Create Express app
 const app = express();
@@ -33,6 +34,7 @@ app.get('/health', (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/bets', betRoutes);
 
 // 404 handler
 app.use((req, res) => {
