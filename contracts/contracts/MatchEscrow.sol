@@ -23,7 +23,7 @@ contract MatchEscrow is Ownable, Pausable, ReentrancyGuard {
 
     // State variables
     address public feeRecipient;
-    uint256 public feeBps = 2000; // 20%
+    uint256 public feeBps = 500; // 5%
     address public resultSigner;
 
     // Token whitelist
@@ -252,10 +252,18 @@ contract MatchEscrow is Ownable, Pausable, ReentrancyGuard {
         bool canCancel = false;
         string memory reason;
 
-        if (matchData.status == MatchStatus.Created && block.timestamp >= matchData.acceptBy) {
+        // Creator can cancel anytime before opponent accepts
+        if (matchData.status == MatchStatus.Created && msg.sender == matchData.playerA) {
+            canCancel = true;
+            reason = "Cancelled by creator";
+        }
+        // Anyone can cancel after accept deadline
+        else if (matchData.status == MatchStatus.Created && block.timestamp >= matchData.acceptBy) {
             canCancel = true;
             reason = "Accept deadline passed";
-        } else if (matchData.status == MatchStatus.Accepted && block.timestamp >= matchData.depositBy) {
+        }
+        // Anyone can cancel after deposit deadline
+        else if (matchData.status == MatchStatus.Accepted && block.timestamp >= matchData.depositBy) {
             canCancel = true;
             reason = "Deposit deadline passed";
         }

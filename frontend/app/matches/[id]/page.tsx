@@ -8,7 +8,7 @@ import { useApi } from '@/lib/hooks/useApi';
 import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
-type Action = 'idle' | 'accepting' | 'depositing' | 'cancelling' | 'claiming_refund';
+type Action = 'idle' | 'accepting' | 'depositing' | 'cancelling';
 
 export default function MatchDetailsPage() {
   const router = useRouter();
@@ -150,50 +150,49 @@ export default function MatchDetailsPage() {
     });
   };
 
-  // Cancel match (DB only — creator can cancel before opponent accepts)
-  const handleCancelMatch = async () => {
+  // Cancel match — if deposited, do on-chain cancel (instant refund) + DB update; otherwise DB only
+  const handleCancelMatch = () => {
     setAction('cancelling');
     setError(null);
-    try {
-      const response = await api.cancelMatch(matchId);
-      if (response.error) {
-        setError(response.error);
-        setAction('idle');
-      } else {
-        fetchMatch();
-        setAction('idle');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to cancel match');
-      setAction('idle');
-    }
-  };
 
-  // Claim on-chain refund (calls cancelMatch on escrow — only works after accept deadline)
-  const handleClaimRefund = () => {
-    setAction('claiming_refund');
-    setError(null);
-    sendCalls({
-      calls: [
-        {
-          to: ESCROW_CONTRACT_ADDRESS,
-          data: encodeFunctionData({
-            abi: ESCROW_ABI,
-            functionName: 'cancelMatch',
-            args: [matchId as `0x${string}`],
-          }),
+    if (myDeposited) {
+      // On-chain cancel (refunds deposit immediately), then update DB
+      sendCalls({
+        calls: [
+          {
+            to: ESCROW_CONTRACT_ADDRESS,
+            data: encodeFunctionData({
+              abi: ESCROW_ABI,
+              functionName: 'cancelMatch',
+              args: [matchId as `0x${string}`],
+            }),
+          },
+        ],
+      }, {
+        onSuccess: async () => {
+          await api.cancelMatch(matchId);
+          setAction('idle');
+          fetchMatch();
         },
-      ],
-    }, {
-      onSuccess: () => {
+        onError: (err) => {
+          setError(err.message || 'Cancel failed');
+          setAction('idle');
+        },
+      });
+    } else {
+      // No on-chain deposit — just update DB
+      api.cancelMatch(matchId).then((response) => {
+        if (response.error) {
+          setError(response.error);
+        } else {
+          fetchMatch();
+        }
         setAction('idle');
-        fetchMatch();
-      },
-      onError: (err) => {
-        setError(err.message || 'Refund failed — deadline may not have passed yet');
+      }).catch((err: any) => {
+        setError(err.message || 'Failed to cancel match');
         setAction('idle');
-      },
-    });
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -348,18 +347,16 @@ export default function MatchDetailsPage() {
           </button>
         )}
 
-        {/* Cancelled match: claim on-chain refund if deposited */}
-        {match.status === 'cancelled' && isPlayerA && myDeposited && (
-          <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-4 sm:p-6">
-            <p className="text-orange-800 font-semibold text-sm mb-2">Your deposit needs to be reclaimed on-chain</p>
-            <p className="text-orange-700 text-xs mb-3">The on-chain refund is available after the accept deadline passes (24h from match creation).</p>
-            <button
-              onClick={handleClaimRefund}
-              disabled={isProcessing}
-              className="w-full bg-orange-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 text-sm"
-            >
-              {action === 'claiming_refund' ? 'Confirm in wallet...' : `Claim Refund (${stakeDisplay} ${tokenSymbol})`}
-            </button>
+        {/* Cancelled match info */}
+        {match.status === 'cancelled' && (
+          <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4 sm:p-6 text-center">
+            <p className="text-gray-700 font-semibold text-sm">This match has been cancelled.</p>
+            {isPlayerA && myDeposited && !match.refund_tx_hash && (
+              <p className="text-yellow-600 text-xs mt-1">Your on-chain deposit may still need to be refunded. Contact support if USDC has not returned to your wallet.</p>
+            )}
+            {isPlayerA && myDeposited && match.refund_tx_hash && (
+              <p className="text-green-600 text-xs mt-1">Your deposit has been refunded.</p>
+            )}
           </div>
         )}
 
