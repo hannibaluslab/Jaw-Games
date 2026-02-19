@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useGrantPermissions } from '@jaw.id/wagmi';
+import { useGrantPermissions } from '@jaw.id/wagmi/Hooks';
 import { useApi } from './useApi';
 import { ESCROW_CONTRACT_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 
@@ -48,9 +48,9 @@ export function useSessionPermission() {
             // ERC-20 approve
             { target: USDC_ADDRESS, functionSignature: 'approve(address,uint256)' },
             // Escrow contract functions
-            { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'createMatch(bytes32,bytes32,address,uint256,address,uint256,uint256,uint256)' },
-            { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'acceptMatch(bytes32)' },
-            { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'deposit(bytes32)' },
+            // { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'createMatch(bytes32,bytes32,address,uint256,address,uint256,uint256,uint256)' },
+            // { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'acceptMatch(bytes32)' },
+            // { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'deposit(bytes32)' },
           ],
           spends: [
             {
