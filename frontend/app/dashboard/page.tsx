@@ -186,9 +186,17 @@ function DashboardContent() {
             </button>
           </div>
         ) : (
-          <div className="mb-4 sm:mb-6 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <p className="text-green-800 text-sm font-medium">Session active — no wallet popups needed</p>
+          <div className="mb-4 sm:mb-6 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <p className="text-green-800 text-sm font-medium">Session active — no wallet popups needed</p>
+            </div>
+            <button
+              onClick={async () => { await revokeSession(); }}
+              className="text-green-700 text-xs underline hover:text-green-900"
+            >
+              Revoke
+            </button>
           </div>
         )}
 
