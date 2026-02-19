@@ -22,6 +22,14 @@ function DashboardContent() {
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sendAmount, setSendAmount] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const copyAddress = (addr: string) => {
+    navigator.clipboard.writeText(addr);
+    setCopiedAddress(addr);
+    setTimeout(() => setCopiedAddress(null), 1500);
+  };
 
   const { hasSession, isGranting, grantSession, checkSession, revokeSession, error: sessionError } = useSessionPermission();
 
@@ -157,6 +165,14 @@ function DashboardContent() {
           <div className="min-w-0">
             <h1 className="text-lg sm:text-2xl font-bold text-gray-900">JAW Games</h1>
             <p className="text-xs sm:text-sm text-gray-600 truncate">{username}.{ENS_DOMAIN}</p>
+            {address && (
+              <button
+                onClick={() => copyAddress(address)}
+                className="text-xs text-gray-400 hover:text-gray-600 font-mono transition"
+              >
+                {copiedAddress === address ? 'Copied!' : truncateAddress(address)}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <div className="text-right">
@@ -274,6 +290,12 @@ function DashboardContent() {
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate">{player.username}</p>
                       <p className="text-xs text-gray-500 truncate">{player.ensName}</p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); copyAddress(player.smartAccountAddress); }}
+                        className="text-xs text-gray-400 hover:text-gray-600 font-mono transition"
+                      >
+                        {copiedAddress === player.smartAccountAddress ? 'Copied!' : truncateAddress(player.smartAccountAddress)}
+                      </button>
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <button
