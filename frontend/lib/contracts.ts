@@ -71,6 +71,13 @@ export const ESCROW_ABI = [
   },
   {
     inputs: [{ name: 'matchId', type: 'bytes32' }],
+    name: 'cancelMatch',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'matchId', type: 'bytes32' }],
     name: 'matches',
     outputs: [
       {

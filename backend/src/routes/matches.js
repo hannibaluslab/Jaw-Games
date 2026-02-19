@@ -16,6 +16,9 @@ router.post('/:matchId/deposited', MatchController.confirmDeposit);
 router.post('/session/create', authMiddleware, MatchController.createMatchWithSession);
 router.post('/session/:matchId/accept', authMiddleware, MatchController.acceptMatchWithSession);
 
+// Cancel match (requires auth)
+router.post('/:matchId/cancel', authMiddleware, MatchController.cancelMatch);
+
 // Get match details
 router.get('/:matchId', MatchController.getMatch);
 router.get('/:matchId/status', MatchController.getMatchStatus);

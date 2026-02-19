@@ -137,6 +137,10 @@ export class ApiClient {
     return this.get(`/api/matches/invites/${username}`);
   }
 
+  async cancelMatch(matchId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.post(`/api/matches/${matchId}/cancel`, {});
+  }
+
   async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: 'DELETE' });
   }

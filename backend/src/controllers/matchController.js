@@ -253,6 +253,34 @@ class MatchController {
   }
 
   /**
+   * Cancel a match (only creator, only before opponent accepts)
+   */
+  static async cancelMatch(req, res) {
+    try {
+      const { matchId } = req.params;
+      const { userId } = req.user;
+
+      const match = await Match.findByMatchId(matchId);
+      if (!match) return res.status(404).json({ error: 'Match not found' });
+
+      if (match.player_a_id !== userId) {
+        return res.status(403).json({ error: 'Only the match creator can cancel' });
+      }
+
+      if (match.status !== 'created' && match.status !== 'pending_creation') {
+        return res.status(400).json({ error: 'Match cannot be cancelled at this stage' });
+      }
+
+      await Match.updateStatus(matchId, 'cancelled');
+
+      res.json({ message: 'Match cancelled. On-chain refund available after the accept deadline passes.' });
+    } catch (error) {
+      console.error('Cancel match error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Create match via session permission (no wallet popup)
    */
   static async createMatchWithSession(req, res) {

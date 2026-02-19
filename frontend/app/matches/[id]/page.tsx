@@ -8,7 +8,7 @@ import { useApi } from '@/lib/hooks/useApi';
 import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
-type Action = 'idle' | 'accepting' | 'depositing';
+type Action = 'idle' | 'accepting' | 'depositing' | 'cancelling' | 'claiming_refund';
 
 export default function MatchDetailsPage() {
   const router = useRouter();
@@ -150,6 +150,52 @@ export default function MatchDetailsPage() {
     });
   };
 
+  // Cancel match (DB only — creator can cancel before opponent accepts)
+  const handleCancelMatch = async () => {
+    setAction('cancelling');
+    setError(null);
+    try {
+      const response = await api.cancelMatch(matchId);
+      if (response.error) {
+        setError(response.error);
+        setAction('idle');
+      } else {
+        fetchMatch();
+        setAction('idle');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to cancel match');
+      setAction('idle');
+    }
+  };
+
+  // Claim on-chain refund (calls cancelMatch on escrow — only works after accept deadline)
+  const handleClaimRefund = () => {
+    setAction('claiming_refund');
+    setError(null);
+    sendCalls({
+      calls: [
+        {
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'cancelMatch',
+            args: [matchId as `0x${string}`],
+          }),
+        },
+      ],
+    }, {
+      onSuccess: () => {
+        setAction('idle');
+        fetchMatch();
+      },
+      onError: (err) => {
+        setError(err.message || 'Refund failed — deadline may not have passed yet');
+        setAction('idle');
+      },
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     const map: Record<string, { label: string; classes: string }> = {
       pending_creation: { label: 'Pending', classes: 'bg-gray-100 text-gray-800' },
@@ -159,6 +205,7 @@ export default function MatchDetailsPage() {
       in_progress: { label: 'In Progress', classes: 'bg-blue-100 text-blue-800' },
       settling: { label: 'Settling...', classes: 'bg-purple-100 text-purple-800' },
       settled: { label: 'Completed', classes: 'bg-gray-100 text-gray-800' },
+      cancelled: { label: 'Cancelled', classes: 'bg-red-100 text-red-800' },
     };
     const info = map[status] || { label: status, classes: 'bg-gray-100 text-gray-800' };
     return <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold ${info.classes}`}>{info.label}</span>;
@@ -288,6 +335,32 @@ export default function MatchDetailsPage() {
               ? (hasSession ? 'Accepting match...' : 'Confirm in wallet...')
               : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
+        )}
+
+        {/* Player A: cancel match before opponent accepts */}
+        {match.status === 'created' && isPlayerA && (
+          <button
+            onClick={handleCancelMatch}
+            disabled={isProcessing}
+            className="w-full bg-red-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50 text-base sm:text-lg mt-4"
+          >
+            {action === 'cancelling' ? 'Cancelling...' : 'Cancel Match'}
+          </button>
+        )}
+
+        {/* Cancelled match: claim on-chain refund if deposited */}
+        {match.status === 'cancelled' && isPlayerA && myDeposited && (
+          <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-4 sm:p-6">
+            <p className="text-orange-800 font-semibold text-sm mb-2">Your deposit needs to be reclaimed on-chain</p>
+            <p className="text-orange-700 text-xs mb-3">The on-chain refund is available after the accept deadline passes (24h from match creation).</p>
+            <button
+              onClick={handleClaimRefund}
+              disabled={isProcessing}
+              className="w-full bg-orange-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 text-sm"
+            >
+              {action === 'claiming_refund' ? 'Confirm in wallet...' : `Claim Refund (${stakeDisplay} ${tokenSymbol})`}
+            </button>
+          </div>
         )}
 
         {/* Player A: deposit if not yet deposited */}
