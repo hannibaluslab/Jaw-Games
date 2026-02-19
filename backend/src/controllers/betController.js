@@ -5,6 +5,7 @@ const BetParticipant = require('../models/BetParticipant');
 const BetEvent = require('../models/BetEvent');
 const User = require('../models/User');
 const BetSettlementService = require('../services/betSettlementService');
+const { betSettlerContract } = require('../config/blockchain');
 
 class BetController {
   /**
@@ -329,6 +330,26 @@ class BetController {
       const acceptedJudges = await BetParticipant.countAcceptedJudges(bet.id);
 
       if (acceptedJudges === totalJudges) {
+        // Create the bet on-chain via relayer
+        if (betSettlerContract) {
+          try {
+            const bettingDeadlineTs = Math.floor(new Date(bet.betting_deadline).getTime() / 1000);
+            const settleByTs = Math.floor(new Date(bet.settle_by).getTime() / 1000);
+            const tx = await betSettlerContract.createBet(
+              betId,
+              BigInt(bet.stake_amount),
+              bet.token_address,
+              bettingDeadlineTs,
+              settleByTs
+            );
+            await tx.wait(1);
+            await BetEvent.create(bet.id, 'on_chain_created', null, { txHash: tx.hash });
+          } catch (chainErr) {
+            console.error('On-chain createBet failed:', chainErr.message);
+            // Still open the bet — on-chain creation can be retried
+          }
+        }
+
         await Bet.updateStatus(betId, 'open');
         await BetEvent.create(bet.id, 'bet_opened', null, { reason: 'All judges accepted' });
         return res.json({ message: 'Judge accepted. All judges confirmed — bet is now open!' });

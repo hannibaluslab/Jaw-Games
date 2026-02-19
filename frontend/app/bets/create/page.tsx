@@ -2,20 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { useAccount, useSendCalls } from 'wagmi';
-import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
+import { useAccount } from 'wagmi';
+import { keccak256, toHex, parseUnits } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import {
-  BET_SETTLER_CONTRACT_ADDRESS,
-  BET_SETTLER_ABI,
-  ERC20_ABI,
   TOKENS,
   LIFEBET_FEE,
-  LIFEBET_WINNER_SHARE,
   MIN_STAKE,
 } from '@/lib/contracts';
 
-type Step = 'statement' | 'outcomes' | 'stake' | 'window' | 'judges' | 'review' | 'signing' | 'saving' | 'done';
+type Step = 'statement' | 'outcomes' | 'stake' | 'window' | 'judges' | 'review' | 'saving' | 'done';
 
 function CreateBetContent() {
   const router = useRouter();
@@ -35,8 +31,7 @@ function CreateBetContent() {
   const [resolveAfterDays, setResolveAfterDays] = useState(7);
   const [judgeUsernames, setJudgeUsernames] = useState<string[]>(['', '', '']);
   const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
-
-  const { sendCalls, isPending: isTxPending } = useSendCalls();
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (status === 'connecting' || status === 'reconnecting') return;
@@ -115,69 +110,41 @@ function CreateBetContent() {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!address) return;
 
     const tokenInfo = TOKENS[token];
     const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
     const betId = keccak256(toHex(`bet-${crypto.randomUUID()}-${Date.now()}`));
-    const bettingDeadlineTs = BigInt(Math.floor(bettingDeadline.getTime() / 1000));
-    const settleByTs = BigInt(Math.floor(resolveDate.getTime() / 1000) + 30 * 24 * 60 * 60);
 
     setError(null);
-    setStep('signing');
+    setStep('saving');
+    setIsSaving(true);
 
-    sendCalls({
-      calls: [
-        {
-          to: tokenInfo.address,
-          data: encodeFunctionData({
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [BET_SETTLER_CONTRACT_ADDRESS, stakeAmountParsed],
-          }),
-        },
-        {
-          to: BET_SETTLER_CONTRACT_ADDRESS,
-          data: encodeFunctionData({
-            abi: BET_SETTLER_ABI,
-            functionName: 'createBet',
-            args: [betId, stakeAmountParsed, tokenInfo.address, bettingDeadlineTs, settleByTs],
-          }),
-        },
-      ],
-    }, {
-      onSuccess: async (result) => {
-        setStep('saving');
-        const response = await api.createBet({
-          statement: statement.trim(),
-          rules: rules.trim() || undefined,
-          outcomes: outcomes.filter((o) => o.trim()),
-          stakeAmount: stakeAmountParsed.toString(),
-          token: tokenInfo.address,
-          bettingDeadline: bettingDeadline.toISOString(),
-          resolveDate: resolveDate.toISOString(),
-          judgeUsernames: validJudges,
-          betId,
-          txHash: result.id,
-        });
-
-        if (response.error) {
-          setError(response.error);
-          setStep('review');
-          return;
-        }
-        setStep('done');
-        router.push(`/bets/${encodeURIComponent(betId)}`);
-      },
-      onError: (err) => {
-        setError(err.message || 'Transaction failed');
-        setStep('review');
-      },
+    const response = await api.createBet({
+      statement: statement.trim(),
+      rules: rules.trim() || undefined,
+      outcomes: outcomes.filter((o) => o.trim()),
+      stakeAmount: stakeAmountParsed.toString(),
+      token: tokenInfo.address,
+      bettingDeadline: bettingDeadline.toISOString(),
+      resolveDate: resolveDate.toISOString(),
+      judgeUsernames: validJudges,
+      betId,
     });
+
+    if (response.error) {
+      setError(response.error);
+      setStep('review');
+      setIsSaving(false);
+      return;
+    }
+
+    setStep('done');
+    router.push(`/bets/${encodeURIComponent(betId)}`);
   };
 
-  const isProcessing = step === 'signing' || step === 'saving' || step === 'done';
+  const isProcessing = step === 'saving' || step === 'done';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -422,8 +389,7 @@ function CreateBetContent() {
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4" />
               <p className="text-gray-700 font-medium">
-                {step === 'signing' && (isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...')}
-                {step === 'saving' && 'Saving bet...'}
+                {step === 'saving' && 'Creating bet...'}
                 {step === 'done' && 'Bet created! Redirecting...'}
               </p>
             </div>
@@ -446,7 +412,7 @@ function CreateBetContent() {
                   disabled={!canProceed()}
                   className="flex-1 bg-teal-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-teal-600 transition disabled:opacity-50"
                 >
-                  Create Bet & Sign
+                  Create Bet
                 </button>
               ) : (
                 <button
