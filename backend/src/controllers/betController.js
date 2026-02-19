@@ -343,14 +343,20 @@ class BetController {
           try {
             const bettingDeadlineTs = Math.floor(new Date(bet.betting_deadline).getTime() / 1000);
             const settleByTs = Math.floor(new Date(bet.settle_by).getTime() / 1000);
+            const feeData = await betSettlerContract.runner.provider.getFeeData();
             const tx = await betSettlerContract.createBet(
               betId,
               BigInt(bet.stake_amount),
               bet.token_address,
               bettingDeadlineTs,
-              settleByTs
+              settleByTs,
+              {
+                maxFeePerGas: (feeData.maxFeePerGas || 1000000000n) * 2n,
+                maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas || 1000000n) * 2n,
+                gasLimit: 250000n,
+              }
             );
-            await tx.wait(1);
+            await tx.wait(2);
             await BetEvent.create(bet.id, 'on_chain_created', null, { txHash: tx.hash });
           } catch (chainErr) {
             console.error('On-chain createBet failed:', chainErr.message);
