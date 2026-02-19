@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useGrantPermissions } from '@jaw.id/wagmi/Hooks';
+import { useGrantPermissions } from '@jaw.id/wagmi';
 import { useApi } from './useApi';
 import { ESCROW_CONTRACT_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
 
