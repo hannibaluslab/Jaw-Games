@@ -123,7 +123,7 @@ export default function BetDetailPage() {
 
   useEffect(() => {
     fetchBet(true);
-    const interval = setInterval(() => fetchBet(false), 15000);
+    const interval = setInterval(() => fetchBet(false), 5000);
     return () => clearInterval(interval);
   }, [betId]);
 

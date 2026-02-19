@@ -42,7 +42,7 @@ export default function BetsPage() {
     };
 
     fetchBets();
-    const interval = setInterval(fetchBets, 30000);
+    const interval = setInterval(fetchBets, 5000);
     return () => clearInterval(interval);
   }, [api, tab]);
 
