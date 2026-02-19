@@ -85,7 +85,7 @@ export default function BetsPage() {
           </button>
           <button
             onClick={() => router.push('/bets/create')}
-            className="bg-amber-500 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-amber-600 transition"
+            className="bg-teal-500 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-teal-600 transition"
           >
             Create Bet
           </button>
@@ -154,7 +154,7 @@ export default function BetsPage() {
                     <div className="flex items-center gap-3">
                       <span className="font-semibold text-gray-700">{poolDisplay} {tokenSymbol} pool</span>
                       {bet.status === 'open' && (
-                        <span className="text-amber-600 font-medium">{getTimeLeft(bet.betting_deadline)}</span>
+                        <span className="text-teal-600 font-medium">{getTimeLeft(bet.betting_deadline)}</span>
                       )}
                     </div>
                   </div>
