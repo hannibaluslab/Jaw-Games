@@ -27,7 +27,7 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: 'v2-lifebet', timestamp: new Date().toISOString() });
 });
 
 // API routes
