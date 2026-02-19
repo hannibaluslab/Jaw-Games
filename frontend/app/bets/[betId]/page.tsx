@@ -174,13 +174,26 @@ export default function BetDetailPage() {
 
   const totalBettors = bettors.length;
 
+  const formatDateEU = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
+
   const getTimeLeft = (deadline: string) => {
     const diff = new Date(deadline).getTime() - Date.now();
     if (diff <= 0) return 'Passed';
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     if (days > 0) return `${days}d ${hours}h`;
-    return `${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
   };
 
   const handlePlaceBet = (outcomeIdx: number) => {
@@ -191,37 +204,42 @@ export default function BetDetailPage() {
     const tokenInfo = bet.token_address.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? TOKENS.USDT : TOKENS.USDC;
     const stakeAmountParsed = BigInt(bet.stake_amount);
 
-    sendCalls({
-      calls: [
-        {
-          to: tokenInfo.address,
-          data: encodeFunctionData({
-            abi: ERC20_ABI,
-            functionName: 'approve',
-            args: [BET_SETTLER_CONTRACT_ADDRESS, stakeAmountParsed],
-          }),
+    try {
+      sendCalls({
+        calls: [
+          {
+            to: tokenInfo.address,
+            data: encodeFunctionData({
+              abi: ERC20_ABI,
+              functionName: 'approve',
+              args: [BET_SETTLER_CONTRACT_ADDRESS, stakeAmountParsed],
+            }),
+          },
+          {
+            to: BET_SETTLER_CONTRACT_ADDRESS,
+            data: encodeFunctionData({
+              abi: BET_SETTLER_ABI,
+              functionName: 'placeBet',
+              args: [betId as `0x${string}`, outcomeIdx],
+            }),
+          },
+        ],
+      }, {
+        onSuccess: async (result) => {
+          await api.placeBet(betId, { outcome: outcomeIdx, txHash: result.id });
+          setSelectedOutcome(null);
+          setActionLoading(false);
+          fetchBet();
         },
-        {
-          to: BET_SETTLER_CONTRACT_ADDRESS,
-          data: encodeFunctionData({
-            abi: BET_SETTLER_ABI,
-            functionName: 'placeBet',
-            args: [betId as `0x${string}`, outcomeIdx],
-          }),
+        onError: (err) => {
+          setError(err.message || 'Transaction failed');
+          setActionLoading(false);
         },
-      ],
-    }, {
-      onSuccess: async (result) => {
-        await api.placeBet(betId, { outcome: outcomeIdx, txHash: result.id });
-        setSelectedOutcome(null);
-        setActionLoading(false);
-        fetchBet();
-      },
-      onError: (err) => {
-        setError(err.message || 'Transaction failed');
-        setActionLoading(false);
-      },
-    });
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to send transaction');
+      setActionLoading(false);
+    }
   };
 
   const handleClaimWinnings = () => {
@@ -229,26 +247,31 @@ export default function BetDetailPage() {
     setError(null);
     setActionLoading(true);
 
-    sendCalls({
-      calls: [{
-        to: BET_SETTLER_CONTRACT_ADDRESS,
-        data: encodeFunctionData({
-          abi: BET_SETTLER_ABI,
-          functionName: 'claimWinnings',
-          args: [betId as `0x${string}`],
-        }),
-      }],
-    }, {
-      onSuccess: async (result) => {
-        await api.claimBetWinnings(betId, result.id);
-        setActionLoading(false);
-        fetchBet();
-      },
-      onError: (err) => {
-        setError(err.message || 'Claim failed');
-        setActionLoading(false);
-      },
-    });
+    try {
+      sendCalls({
+        calls: [{
+          to: BET_SETTLER_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: BET_SETTLER_ABI,
+            functionName: 'claimWinnings',
+            args: [betId as `0x${string}`],
+          }),
+        }],
+      }, {
+        onSuccess: async (result) => {
+          await api.claimBetWinnings(betId, result.id);
+          setActionLoading(false);
+          fetchBet();
+        },
+        onError: (err) => {
+          setError(err.message || 'Claim failed');
+          setActionLoading(false);
+        },
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to send transaction');
+      setActionLoading(false);
+    }
   };
 
   const handleClaimRefund = () => {
@@ -256,26 +279,31 @@ export default function BetDetailPage() {
     setError(null);
     setActionLoading(true);
 
-    sendCalls({
-      calls: [{
-        to: BET_SETTLER_CONTRACT_ADDRESS,
-        data: encodeFunctionData({
-          abi: BET_SETTLER_ABI,
-          functionName: 'claimRefund',
-          args: [betId as `0x${string}`],
-        }),
-      }],
-    }, {
-      onSuccess: async (result) => {
-        await api.claimBetWinnings(betId, result.id);
-        setActionLoading(false);
-        fetchBet();
-      },
-      onError: (err) => {
-        setError(err.message || 'Refund failed');
-        setActionLoading(false);
-      },
-    });
+    try {
+      sendCalls({
+        calls: [{
+          to: BET_SETTLER_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: BET_SETTLER_ABI,
+            functionName: 'claimRefund',
+            args: [betId as `0x${string}`],
+          }),
+        }],
+      }, {
+        onSuccess: async (result) => {
+          await api.claimBetWinnings(betId, result.id);
+          setActionLoading(false);
+          fetchBet();
+        },
+        onError: (err) => {
+          setError(err.message || 'Refund failed');
+          setActionLoading(false);
+        },
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to send transaction');
+      setActionLoading(false);
+    }
   };
 
   const handleJudgeRespond = async (response: 'accepted' | 'declined') => {
@@ -630,15 +658,15 @@ export default function BetDetailPage() {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">Betting closes</span>
-              <span className="font-medium">{new Date(bet.betting_deadline).toLocaleDateString()} ({getTimeLeft(bet.betting_deadline)})</span>
+              <span className="font-medium">{formatDateEU(bet.betting_deadline)} ({getTimeLeft(bet.betting_deadline)})</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Resolve date</span>
-              <span className="font-medium">{new Date(bet.resolve_date).toLocaleDateString()} ({getTimeLeft(bet.resolve_date)})</span>
+              <span className="font-medium">{formatDateEU(bet.resolve_date)} ({getTimeLeft(bet.resolve_date)})</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Judge deadline</span>
-              <span className="font-medium">{new Date(bet.judge_deadline).toLocaleDateString()}</span>
+              <span className="font-medium">{formatDateEU(bet.judge_deadline)}</span>
             </div>
           </div>
         </div>
@@ -742,7 +770,7 @@ export default function BetDetailPage() {
               {events.map((event) => (
                 <div key={event.id} className="flex items-start gap-2 text-xs text-gray-500">
                   <span className="text-gray-400 whitespace-nowrap">
-                    {new Date(event.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {formatDateEU(event.created_at)}
                   </span>
                   <span>
                     {event.actor_username && <span className="font-medium text-gray-700">{event.actor_username} </span>}

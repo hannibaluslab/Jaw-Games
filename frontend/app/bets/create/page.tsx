@@ -154,8 +154,15 @@ function CreateBetContent() {
 
   const isProcessing = step === 'saving' || step === 'done';
 
-  const formatDatePreview = (d: Date) =>
-    d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const formatDatePreview = (d: Date) => {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day} ${month} ${year}, ${hours}:${mins}`;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
