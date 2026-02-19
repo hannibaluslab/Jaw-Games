@@ -8,15 +8,16 @@ class BetParticipant {
       role,
       outcome = null,
       inviteStatus = 'pending',
+      amount = 0,
     } = data;
 
     const query = `
-      INSERT INTO bet_participants (bet_id, user_id, role, outcome, invite_status)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO bet_participants (bet_id, user_id, role, outcome, invite_status, amount)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
 
-    const result = await db.query(query, [betId, userId, role, outcome, inviteStatus]);
+    const result = await db.query(query, [betId, userId, role, outcome, inviteStatus, amount]);
     return result.rows[0];
   }
 
@@ -89,14 +90,14 @@ class BetParticipant {
     return result.rows[0];
   }
 
-  static async setOutcomeAndDeposit(betInternalId, userId, outcome) {
-    const query = `
-      UPDATE bet_participants
-      SET outcome = $1, deposited = true
-      WHERE bet_id = $2 AND user_id = $3
-      RETURNING *
-    `;
-    const result = await db.query(query, [outcome, betInternalId, userId]);
+  static async setOutcomeAndDeposit(betInternalId, userId, outcome, amount = null) {
+    const query = amount !== null
+      ? `UPDATE bet_participants SET outcome = $1, deposited = true, amount = $4 WHERE bet_id = $2 AND user_id = $3 RETURNING *`
+      : `UPDATE bet_participants SET outcome = $1, deposited = true WHERE bet_id = $2 AND user_id = $3 RETURNING *`;
+    const params = amount !== null
+      ? [outcome, betInternalId, userId, amount]
+      : [outcome, betInternalId, userId];
+    const result = await db.query(query, params);
     return result.rows[0];
   }
 
@@ -142,7 +143,7 @@ class BetParticipant {
 
   static async countByOutcome(betInternalId) {
     const query = `
-      SELECT outcome, COUNT(*) as count
+      SELECT outcome, COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount
       FROM bet_participants
       WHERE bet_id = $1 AND role = 'bettor' AND outcome IS NOT NULL
       GROUP BY outcome

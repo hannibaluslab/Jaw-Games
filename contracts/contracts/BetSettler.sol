@@ -12,7 +12,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /**
  * @title BetSettler
  * @notice Escrow contract for LifeBet — group bets on real life events judged by a trusted panel
- * @dev Supports N bettors, M outcomes, claim-based payouts, 5% platform fee
+ * @dev Supports N bettors, M outcomes, variable bet amounts with min stake, proportional payouts
  */
 contract BetSettler is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -41,7 +41,7 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
     // Bet struct
     struct Bet {
         address creator;
-        uint256 stakeAmount;
+        uint256 minStake;       // Minimum bet amount per bettor
         address token;
         BetStatus status;
         uint256 bettingDeadline;
@@ -49,13 +49,14 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         uint8 winningOutcome;   // 0 = unset, 1-indexed
         uint256 totalPool;
         uint256 feeCollected;
-        uint256 winnerPool;
-        uint256 winnerCount;
+        uint256 winnerPool;     // totalPool - fee
+        uint256 winnerStakeTotal; // sum of winning bettors' amounts (for proportional payout)
     }
 
     // Bettor info
     struct BettorInfo {
-        uint8 outcome;  // 1-indexed, 0 = not a bettor
+        uint8 outcome;    // 1-indexed, 0 = not a bettor
+        uint256 amount;   // actual amount deposited
         bool claimed;
     }
 
@@ -64,12 +65,13 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
     mapping(bytes32 => mapping(address => BettorInfo)) public bettors;
     mapping(bytes32 => uint256) public betBettorCount;
     mapping(bytes32 => mapping(uint8 => uint256)) public outcomeBettorCount;
+    mapping(bytes32 => mapping(uint8 => uint256)) public outcomePool; // total staked per outcome
 
     // Events
     event BetCreated(
         bytes32 indexed betId,
         address indexed creator,
-        uint256 stakeAmount,
+        uint256 minStake,
         address token,
         uint256 bettingDeadline,
         uint256 settleBy
@@ -90,7 +92,7 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         uint256 totalPool,
         uint256 fee,
         uint256 winnerPool,
-        uint256 winnerCount
+        uint256 winnerStakeTotal
     );
 
     event BetCancelled(bytes32 indexed betId, string reason);
@@ -138,27 +140,27 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
     /**
      * @notice Create a new bet
      * @param betId Unique identifier for the bet
-     * @param stakeAmount Fixed stake per bettor (6 decimals)
+     * @param minStake Minimum stake per bettor (6 decimals)
      * @param token Token address (USDC or USDT)
      * @param bettingDeadline When the betting window closes
      * @param settleBy Hard deadline for settlement / emergency refund
      */
     function createBet(
         bytes32 betId,
-        uint256 stakeAmount,
+        uint256 minStake,
         address token,
         uint256 bettingDeadline,
         uint256 settleBy
     ) external whenNotPaused nonReentrant {
         require(bets[betId].creator == address(0), "Bet already exists");
-        require(stakeAmount >= MIN_STAKE, "Stake too low");
+        require(minStake >= MIN_STAKE, "Stake too low");
         require(allowedTokens[token], "Token not allowed");
         require(bettingDeadline > block.timestamp, "Invalid betting deadline");
         require(settleBy > bettingDeadline, "Invalid settle deadline");
 
         bets[betId] = Bet({
             creator: msg.sender,
-            stakeAmount: stakeAmount,
+            minStake: minStake,
             token: token,
             status: BetStatus.Open,
             bettingDeadline: bettingDeadline,
@@ -167,20 +169,22 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
             totalPool: 0,
             feeCollected: 0,
             winnerPool: 0,
-            winnerCount: 0
+            winnerStakeTotal: 0
         });
 
-        emit BetCreated(betId, msg.sender, stakeAmount, token, bettingDeadline, settleBy);
+        emit BetCreated(betId, msg.sender, minStake, token, bettingDeadline, settleBy);
     }
 
     /**
      * @notice Place a bet and deposit stake
      * @param betId The bet to join
      * @param outcome The outcome to bet on (1-indexed)
+     * @param amount The amount to bet (must be >= minStake)
      */
     function placeBet(
         bytes32 betId,
-        uint8 outcome
+        uint8 outcome,
+        uint256 amount
     ) external whenNotPaused nonReentrant {
         Bet storage bet = bets[betId];
 
@@ -189,19 +193,22 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         require(block.timestamp < bet.bettingDeadline, "Betting window closed");
         require(outcome >= 1, "Invalid outcome");
         require(bettors[betId][msg.sender].outcome == 0, "Already placed bet");
+        require(amount >= bet.minStake, "Amount below minimum");
 
-        IERC20(bet.token).safeTransferFrom(msg.sender, address(this), bet.stakeAmount);
+        IERC20(bet.token).safeTransferFrom(msg.sender, address(this), amount);
 
         bettors[betId][msg.sender] = BettorInfo({
             outcome: outcome,
+            amount: amount,
             claimed: false
         });
 
-        bet.totalPool += bet.stakeAmount;
+        bet.totalPool += amount;
         betBettorCount[betId]++;
         outcomeBettorCount[betId][outcome]++;
+        outcomePool[betId][outcome] += amount;
 
-        emit BetPlaced(betId, msg.sender, outcome, bet.stakeAmount);
+        emit BetPlaced(betId, msg.sender, outcome, amount);
     }
 
     /**
@@ -262,7 +269,7 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         // Calculate fee
         uint256 fee = (bet.totalPool * feeBps) / 10000;
         uint256 winnerPool = bet.totalPool - fee;
-        uint256 winnerCount = outcomeBettorCount[betId][winningOutcome];
+        uint256 winnerStakeTotal = outcomePool[betId][winningOutcome];
 
         // Transfer fee
         if (fee > 0) {
@@ -270,7 +277,7 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         }
 
         // If no winners, treat remaining pool as additional fee (all losers)
-        if (winnerCount == 0) {
+        if (winnerStakeTotal == 0) {
             if (winnerPool > 0) {
                 IERC20(bet.token).safeTransfer(feeRecipient, winnerPool);
             }
@@ -280,14 +287,14 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         bet.winningOutcome = winningOutcome;
         bet.feeCollected = fee;
         bet.winnerPool = winnerPool;
-        bet.winnerCount = winnerCount;
+        bet.winnerStakeTotal = winnerStakeTotal;
         bet.status = BetStatus.Settled;
 
-        emit BetSettled(betId, winningOutcome, bet.totalPool, fee, winnerPool, winnerCount);
+        emit BetSettled(betId, winningOutcome, bet.totalPool, fee, winnerPool, winnerStakeTotal);
     }
 
     /**
-     * @notice Claim winnings from a settled bet
+     * @notice Claim winnings from a settled bet (proportional to bet amount)
      * @param betId The bet to claim from
      */
     function claimWinnings(bytes32 betId) external nonReentrant {
@@ -296,11 +303,12 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
         require(bet.status == BetStatus.Settled, "Bet not settled");
         require(bettors[betId][msg.sender].outcome == bet.winningOutcome, "Not a winner");
         require(!bettors[betId][msg.sender].claimed, "Already claimed");
-        require(bet.winnerCount > 0, "No winners");
+        require(bet.winnerStakeTotal > 0, "No winners");
 
         bettors[betId][msg.sender].claimed = true;
 
-        uint256 payout = bet.winnerPool / bet.winnerCount;
+        // Proportional payout: (your amount / total winning side amount) * winner pool
+        uint256 payout = (bettors[betId][msg.sender].amount * bet.winnerPool) / bet.winnerStakeTotal;
 
         IERC20(bet.token).safeTransfer(msg.sender, payout);
 
@@ -348,7 +356,7 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @notice Claim refund from a cancelled bet
+     * @notice Claim refund from a cancelled bet (returns actual deposited amount)
      * @param betId The bet to claim refund from
      */
     function claimRefund(bytes32 betId) external nonReentrant {
@@ -363,9 +371,10 @@ contract BetSettler is Ownable, Pausable, ReentrancyGuard {
 
         bettors[betId][msg.sender].claimed = true;
 
-        IERC20(bet.token).safeTransfer(msg.sender, bet.stakeAmount);
+        uint256 refundAmount = bettors[betId][msg.sender].amount;
+        IERC20(bet.token).safeTransfer(msg.sender, refundAmount);
 
-        emit RefundClaimed(betId, msg.sender, bet.stakeAmount);
+        emit RefundClaimed(betId, msg.sender, refundAmount);
     }
 
     /**

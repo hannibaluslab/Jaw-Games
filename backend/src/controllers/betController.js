@@ -192,7 +192,7 @@ class BetController {
   static async placeBet(req, res) {
     try {
       const { betId } = req.params;
-      const { outcome, txHash } = req.body;
+      const { outcome, txHash, amount } = req.body;
       const { userId } = req.user;
 
       if (!outcome || outcome < 1) {
@@ -212,6 +212,12 @@ class BetController {
         return res.status(400).json({ error: 'Betting window closed' });
       }
 
+      // Validate amount >= min stake
+      const betAmount = amount ? BigInt(amount) : BigInt(bet.stake_amount);
+      if (betAmount < BigInt(bet.stake_amount)) {
+        return res.status(400).json({ error: `Amount must be at least ${bet.stake_amount}` });
+      }
+
       // Check if already a participant
       const existing = await BetParticipant.findByBetAndUser(bet.id, userId);
       if (existing) {
@@ -224,24 +230,26 @@ class BetController {
         return res.status(400).json({ error: 'Bet is full' });
       }
 
-      // Add bettor
+      // Add bettor with amount
       await BetParticipant.create({
         betId: bet.id,
         userId,
         role: 'bettor',
         outcome,
         inviteStatus: 'accepted',
+        amount: betAmount.toString(),
       });
 
       // Mark deposited
-      await BetParticipant.setOutcomeAndDeposit(bet.id, userId, outcome);
+      await BetParticipant.setOutcomeAndDeposit(bet.id, userId, outcome, betAmount.toString());
 
-      // Increment pool
-      await Bet.incrementPool(betId, bet.stake_amount);
+      // Increment pool by actual amount
+      await Bet.incrementPool(betId, betAmount.toString());
 
       const user = await User.findById(userId);
       await BetEvent.create(bet.id, 'bet_placed', userId, {
         outcome,
+        amount: betAmount.toString(),
         txHash,
         username: user?.username,
       });

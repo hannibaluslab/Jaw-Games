@@ -253,7 +253,8 @@ function CreateBetContent() {
           {/* Step: Stake */}
           {step === 'stake' && (
             <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700">Stake per bettor</label>
+              <label className="block text-sm font-medium text-gray-700">Minimum bet</label>
+              <p className="text-xs text-gray-500 -mt-2">Each bettor must bet at least this amount. They can bet more if they want.</p>
               <div className="relative">
                 <input
                   type="number"
@@ -386,7 +387,7 @@ function CreateBetContent() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">Stake</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Minimum bet</p>
                     <p className="font-semibold">{stakeAmount} {token}</p>
                   </div>
                   <div>

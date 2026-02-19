@@ -204,7 +204,7 @@ export class ApiClient {
     return this.get(`/api/bets/${betId}`);
   }
 
-  async placeBet(betId: string, data: { outcome: number; txHash?: string }): Promise<ApiResponse<{ message: string }>> {
+  async placeBet(betId: string, data: { outcome: number; amount?: string; txHash?: string }): Promise<ApiResponse<{ message: string }>> {
     return this.post(`/api/bets/${betId}/join`, data);
   }
 

@@ -125,6 +125,7 @@ export const BET_SETTLER_ABI = [
     inputs: [
       { name: 'betId', type: 'bytes32' },
       { name: 'outcome', type: 'uint8' },
+      { name: 'amount', type: 'uint256' },
     ],
     name: 'placeBet',
     outputs: [],
@@ -159,7 +160,7 @@ export const BET_SETTLER_ABI = [
       {
         components: [
           { name: 'creator', type: 'address' },
-          { name: 'stakeAmount', type: 'uint256' },
+          { name: 'minStake', type: 'uint256' },
           { name: 'token', type: 'address' },
           { name: 'status', type: 'uint8' },
           { name: 'bettingDeadline', type: 'uint256' },
@@ -168,7 +169,7 @@ export const BET_SETTLER_ABI = [
           { name: 'totalPool', type: 'uint256' },
           { name: 'feeCollected', type: 'uint256' },
           { name: 'winnerPool', type: 'uint256' },
-          { name: 'winnerCount', type: 'uint256' },
+          { name: 'winnerStakeTotal', type: 'uint256' },
         ],
         type: 'tuple',
       },

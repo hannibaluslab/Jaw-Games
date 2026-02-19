@@ -3,7 +3,7 @@
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useAccount, useSendCalls } from 'wagmi';
-import { formatUnits, encodeFunctionData } from 'viem';
+import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import {
   BET_SETTLER_CONTRACT_ADDRESS,
@@ -30,6 +30,7 @@ export default function BetDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<number | null>(null);
+  const [betAmount, setBetAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Replace judge state
@@ -202,7 +203,7 @@ export default function BetDetailPage() {
     setActionLoading(true);
 
     const tokenInfo = bet.token_address.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? TOKENS.USDT : TOKENS.USDC;
-    const stakeAmountParsed = BigInt(bet.stake_amount);
+    const parsedAmount = parseUnits(betAmount || formatUnits(BigInt(bet.stake_amount), 6), 6);
 
     try {
       sendCalls({
@@ -212,7 +213,7 @@ export default function BetDetailPage() {
             data: encodeFunctionData({
               abi: ERC20_ABI,
               functionName: 'approve',
-              args: [BET_SETTLER_CONTRACT_ADDRESS, stakeAmountParsed],
+              args: [BET_SETTLER_CONTRACT_ADDRESS, parsedAmount],
             }),
           },
           {
@@ -220,14 +221,15 @@ export default function BetDetailPage() {
             data: encodeFunctionData({
               abi: BET_SETTLER_ABI,
               functionName: 'placeBet',
-              args: [betId as `0x${string}`, outcomeIdx],
+              args: [betId as `0x${string}`, outcomeIdx, parsedAmount],
             }),
           },
         ],
       }, {
         onSuccess: async (result) => {
-          await api.placeBet(betId, { outcome: outcomeIdx, txHash: result.id });
+          await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
           setSelectedOutcome(null);
+          setBetAmount('');
           setActionLoading(false);
           fetchBet();
         },
@@ -559,13 +561,31 @@ export default function BetDetailPage() {
 
           {/* Place bet action */}
           {canBet && selectedOutcome && (
-            <button
-              onClick={() => handlePlaceBet(selectedOutcome)}
-              disabled={actionLoading || isTxPending}
-              className="w-full mt-4 bg-teal-500 text-white py-3 rounded-lg font-semibold hover:bg-teal-600 transition disabled:opacity-50"
-            >
-              {actionLoading || isTxPending ? 'Confirming...' : `Place Bet & Deposit ${stakeDisplay} ${tokenSymbol}`}
-            </button>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Your bet amount</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(e.target.value)}
+                    placeholder={String(stakeDisplay)}
+                    min={stakeDisplay}
+                    step="1"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                  <div className="absolute right-3 top-3 text-gray-500">{tokenSymbol}</div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Minimum: {stakeDisplay} {tokenSymbol}</p>
+              </div>
+              <button
+                onClick={() => handlePlaceBet(selectedOutcome)}
+                disabled={actionLoading || isTxPending || (betAmount !== '' && Number(betAmount) < stakeDisplay)}
+                className="w-full bg-teal-500 text-white py-3 rounded-lg font-semibold hover:bg-teal-600 transition disabled:opacity-50"
+              >
+                {actionLoading || isTxPending ? 'Confirming...' : `Place Bet & Deposit ${betAmount || stakeDisplay} ${tokenSymbol}`}
+              </button>
+            </div>
           )}
         </div>
 
@@ -578,7 +598,7 @@ export default function BetDetailPage() {
               <p className="font-bold text-lg">{poolDisplay} {tokenSymbol}</p>
             </div>
             <div>
-              <p className="text-gray-500">Stake per bettor</p>
+              <p className="text-gray-500">Minimum bet</p>
               <p className="font-bold">{stakeDisplay} {tokenSymbol}</p>
             </div>
             <div>
