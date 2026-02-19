@@ -224,7 +224,7 @@ function DashboardContent() {
           {/* LifeBet Card */}
           <button
             onClick={() => router.push('/bets')}
-            className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
+            className="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
           >
             <div className="flex items-center">
               <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,7 +232,7 @@ function DashboardContent() {
               </svg>
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">LifeBet</h2>
-                <p className="text-red-100 text-sm">Bet on real life events</p>
+                <p className="text-amber-100 text-sm">Bet on real life events</p>
               </div>
             </div>
           </button>

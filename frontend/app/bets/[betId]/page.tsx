@@ -78,7 +78,7 @@ export default function BetDetailPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 text-lg">Bet not found</p>
-          <button onClick={() => router.push('/bets')} className="mt-4 text-red-600 hover:text-red-700 font-medium">
+          <button onClick={() => router.push('/bets')} className="mt-4 text-amber-600 hover:text-amber-700 font-medium">
             Back to Bets
           </button>
         </div>
@@ -304,9 +304,9 @@ export default function BetDetailPage() {
                   key={i}
                   className={`relative rounded-lg border p-3 ${
                     isWinner ? 'border-green-500 bg-green-50' :
-                    selectedOutcome === outcomeIdx ? 'border-red-500 bg-red-50' :
+                    selectedOutcome === outcomeIdx ? 'border-amber-500 bg-amber-50' :
                     'border-gray-200'
-                  } ${canBet ? 'cursor-pointer hover:border-red-300' : ''}`}
+                  } ${canBet ? 'cursor-pointer hover:border-amber-300' : ''}`}
                   onClick={() => canBet && setSelectedOutcome(outcomeIdx)}
                 >
                   <div className="flex items-center justify-between relative z-10">
@@ -331,7 +331,7 @@ export default function BetDetailPage() {
             <button
               onClick={() => handlePlaceBet(selectedOutcome)}
               disabled={actionLoading || isTxPending}
-              className="w-full mt-4 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+              className="w-full mt-4 bg-amber-500 text-white py-3 rounded-lg font-semibold hover:bg-amber-600 transition disabled:opacity-50"
             >
               {actionLoading || isTxPending ? 'Confirming...' : `Place Bet & Deposit ${stakeDisplay} ${tokenSymbol}`}
             </button>
@@ -352,7 +352,7 @@ export default function BetDetailPage() {
             </div>
             <div>
               <p className="text-gray-500">Platform fee</p>
-              <p className="font-bold text-red-600">{LIFEBET_FEE * 100}%</p>
+              <p className="font-bold text-gray-700">{LIFEBET_FEE * 100}%</p>
             </div>
             <div>
               <p className="text-gray-500">Winner share</p>

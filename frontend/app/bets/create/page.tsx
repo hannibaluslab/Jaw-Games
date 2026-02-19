@@ -206,7 +206,7 @@ function CreateBetContent() {
               {steps.map((s, i) => (
                 <div
                   key={s}
-                  className={`h-1 flex-1 rounded-full ${i <= currentStepIndex ? 'bg-red-500' : 'bg-gray-200'}`}
+                  className={`h-1 flex-1 rounded-full ${i <= currentStepIndex ? 'bg-amber-500' : 'bg-gray-200'}`}
                 />
               ))}
             </div>
@@ -221,7 +221,7 @@ function CreateBetContent() {
                 onChange={(e) => setStatement(e.target.value)}
                 placeholder="e.g. Gabite will not talk to Clara this year"
                 rows={3}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
               />
               <label className="block text-sm font-medium text-gray-700">Rules / Clarification (optional)</label>
               <textarea
@@ -229,7 +229,7 @@ function CreateBetContent() {
                 onChange={(e) => setRules(e.target.value)}
                 placeholder="Any additional rules or clarifications..."
                 rows={2}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
               />
             </div>
           )}
@@ -244,12 +244,12 @@ function CreateBetContent() {
                     value={o}
                     onChange={(e) => updateOutcome(i, e.target.value)}
                     placeholder={`Outcome ${i + 1}`}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   />
                   {outcomes.length > 2 && (
                     <button
                       onClick={() => removeOutcome(i)}
-                      className="text-red-500 hover:text-red-700 px-2"
+                      className="text-gray-400 hover:text-gray-600 px-2"
                     >
                       X
                     </button>
@@ -258,7 +258,7 @@ function CreateBetContent() {
               ))}
               <button
                 onClick={addOutcome}
-                className="text-sm text-red-600 hover:text-red-700 font-medium"
+                className="text-sm text-amber-600 hover:text-amber-700 font-medium"
               >
                 + Add outcome
               </button>
@@ -276,7 +276,7 @@ function CreateBetContent() {
                   onChange={(e) => setStakeAmount(e.target.value)}
                   min={MIN_STAKE}
                   step="1"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
                 <div className="absolute right-3 top-3 text-gray-500">USD</div>
               </div>
@@ -289,7 +289,7 @@ function CreateBetContent() {
                     onClick={() => setToken(t)}
                     className={`flex-1 py-3 px-4 rounded-lg border-2 font-semibold transition ${
                       token === t
-                        ? 'border-red-500 bg-red-50 text-red-700'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700'
                         : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
                     }`}
                   >
@@ -309,7 +309,7 @@ function CreateBetContent() {
                 value={bettingDeadlineDays}
                 onChange={(e) => setBettingDeadlineDays(parseInt(e.target.value) || 1)}
                 min={1}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500">Betting closes: {bettingDeadline.toLocaleDateString()}</p>
 
@@ -319,7 +319,7 @@ function CreateBetContent() {
                 value={resolveAfterDays}
                 onChange={(e) => setResolveAfterDays(parseInt(e.target.value) || bettingDeadlineDays + 1)}
                 min={bettingDeadlineDays + 1}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500">Judges vote after: {resolveDate.toLocaleDateString()}</p>
             </div>
@@ -336,7 +336,7 @@ function CreateBetContent() {
                   <select
                     value={u}
                     onChange={(e) => updateJudge(i, e.target.value)}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white"
                   >
                     <option value="">Select a judge...</option>
                     {players
@@ -348,7 +348,7 @@ function CreateBetContent() {
                       ))}
                   </select>
                   {judgeUsernames.length > 3 && (
-                    <button onClick={() => removeJudge(i)} className="text-red-500 hover:text-red-700 px-2">X</button>
+                    <button onClick={() => removeJudge(i)} className="text-gray-400 hover:text-gray-600 px-2">X</button>
                   )}
                 </div>
               ))}
@@ -357,7 +357,7 @@ function CreateBetContent() {
               )}
               <button
                 onClick={addJudge}
-                className="text-sm text-red-600 hover:text-red-700 font-medium"
+                className="text-sm text-amber-600 hover:text-amber-700 font-medium"
               >
                 + Add judge
               </button>
@@ -388,7 +388,7 @@ function CreateBetContent() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Platform fee</p>
-                    <p className="font-semibold text-red-600">{LIFEBET_FEE * 100}%</p>
+                    <p className="font-semibold text-gray-700">{LIFEBET_FEE * 100}%</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Betting closes</p>
@@ -420,7 +420,7 @@ function CreateBetContent() {
           {/* Processing states */}
           {isProcessing && (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4" />
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4" />
               <p className="text-gray-700 font-medium">
                 {step === 'signing' && (isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...')}
                 {step === 'saving' && 'Saving bet...'}
@@ -444,7 +444,7 @@ function CreateBetContent() {
                 <button
                   onClick={handleCreate}
                   disabled={!canProceed()}
-                  className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                  className="flex-1 bg-amber-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-amber-600 transition disabled:opacity-50"
                 >
                   Create Bet & Sign
                 </button>
@@ -452,7 +452,7 @@ function CreateBetContent() {
                 <button
                   onClick={goNext}
                   disabled={!canProceed()}
-                  className="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                  className="flex-1 bg-amber-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-amber-600 transition disabled:opacity-50"
                 >
                   Next
                 </button>
