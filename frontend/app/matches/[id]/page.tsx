@@ -49,38 +49,11 @@ export default function MatchDetailsPage() {
   const isPlayerB = match && currentUsername === match.player_b_username;
   const myDeposited = isPlayerA ? match?.player_a_deposited : match?.player_b_deposited;
 
-  // Accept + deposit via session API (no popup) or fallback to sendCalls
-  const handleAcceptAndDeposit = async () => {
+  // Accept + deposit via wallet popup (sendCalls must be synchronous from click)
+  const handleAcceptAndDeposit = () => {
     setAction('accepting');
     setError(null);
 
-    // Session path: no wallet popup
-    if (hasSession) {
-      try {
-        const response = await api.acceptMatchViaSession(matchId);
-        if (response.error) {
-          // If backend says to fall back, proceed to wallet popup flow
-          if (response.fallback) {
-            console.log('Session API unavailable, falling back to wallet popup');
-            setAction('accepting');
-            // Fall through to wallet popup below
-          } else {
-            setError(response.error);
-            setAction('idle');
-            return;
-          }
-        } else {
-          setAction('idle');
-          router.push(`/matches/${encodeURIComponent(matchId)}/play`);
-          return;
-        }
-      } catch (err: any) {
-        console.log('Session API error, falling back to wallet popup');
-        // Fall through to wallet popup
-      }
-    }
-
-    // Fallback: wallet popup flow
     sendCalls({
       calls: [
         {

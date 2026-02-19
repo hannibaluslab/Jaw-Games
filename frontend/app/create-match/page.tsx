@@ -56,49 +56,13 @@ function CreateMatchContent() {
     setOpponentAddress(player?.smartAccountAddress || null);
   }, [opponentUsername, players]);
 
-  const handleCreateMatch = async () => {
-    if (!opponentUsername || !stakeAmount || !address) return;
+  const handleCreateMatch = () => {
+    if (!opponentUsername || !stakeAmount || !address || !opponentAddress) return;
 
     const tokenInfo = TOKENS[token];
     const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
 
     setError(null);
-
-    // Use session API if active (no wallet popup)
-    if (hasSession && opponentAddress) {
-      setStep('saving');
-      try {
-        const response = await api.createMatchViaSession({
-          gameId: 'tictactoe',
-          opponentUsername,
-          stakeAmount: stakeAmountParsed.toString(),
-          token: tokenInfo.address,
-        });
-        if (response.error) {
-          // If backend says to fall back, proceed to wallet popup flow
-          if (response.fallback) {
-            console.log('Session API unavailable, falling back to wallet popup');
-            setStep('form');
-            // Fall through to wallet popup below
-          } else {
-            setError(response.error);
-            setStep('form');
-            return;
-          }
-        } else {
-          setStep('done');
-          router.push(`/matches/${encodeURIComponent(response.data!.matchId)}`);
-          return;
-        }
-      } catch (err: any) {
-        console.log('Session API error, falling back to wallet popup');
-        setStep('form');
-        // Fall through to wallet popup
-      }
-    }
-
-    // Fallback: wallet popup flow
-    if (!opponentAddress) return;
     setStep('signing');
 
     const matchId = keccak256(toHex(`match-${crypto.randomUUID()}-${Date.now()}`));
