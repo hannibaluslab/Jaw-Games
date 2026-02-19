@@ -40,10 +40,11 @@ export default function PlayGamePage() {
 function GameBoard({ matchId, userId, username }: { matchId: string; userId: string; username: string }) {
   const router = useRouter();
   const api = useApi();
-  const { gameState, gameEnd, connected, opponentConnected, sendMove, error } = useGameWebSocket(matchId, userId);
+  const { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash } = useGameWebSocket(matchId, userId);
 
   const [matchData, setMatchData] = useState<any>(null);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [settlementTxHash, setSettlementTxHash] = useState<string | null>(null);
 
   // Fetch match details for stake/token info
   useEffect(() => {
@@ -61,6 +62,20 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
       return () => clearTimeout(timer);
     }
   }, [gameEnd]);
+
+  // Poll for settlement txHash if not included in game_ended event
+  useEffect(() => {
+    if (!gameEnd || gameEnd.txHash || settlementTxHash || gameEnd.result === 'draw') return;
+    const poll = setInterval(async () => {
+      const res = await api.getMatch(matchId);
+      const m = res.data?.match || res.data;
+      if (m?.settlement_tx_hash) {
+        setSettlementTxHash(m.settlement_tx_hash);
+        clearInterval(poll);
+      }
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [gameEnd, settlementTxHash, api, matchId]);
 
   if (!connected) {
     return (
@@ -101,10 +116,20 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
   const winnerPayout = totalPot * WINNER_SHARE;
 
   const iWon = gameEnd?.winner === userId;
-  const isDraw = gameEnd?.result === 'draw';
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Draw flash overlay */}
+      {drawFlash && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+          <div className="text-center" style={{ animation: 'slideUp 0.3s ease-out' }}>
+            <div className="text-6xl mb-3">🤝</div>
+            <h2 className="text-3xl font-black text-yellow-400 mb-2">DRAW!</h2>
+            <p className="text-gray-400">New round starting...</p>
+          </div>
+        </div>
+      )}
+
       {/* Turn indicator */}
       <div className="mb-4 sm:mb-6 text-center">
         <p className="text-gray-400 text-xs sm:text-sm mb-1">
@@ -161,35 +186,29 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
           >
             {/* Top banner */}
             <div className={`px-6 pt-8 pb-6 text-center ${
-              isDraw
-                ? 'bg-gradient-to-b from-yellow-500/20 to-gray-900'
-                : iWon
-                  ? 'bg-gradient-to-b from-green-500/30 to-gray-900'
-                  : 'bg-gradient-to-b from-red-500/20 to-gray-900'
+              iWon
+                ? 'bg-gradient-to-b from-green-500/30 to-gray-900'
+                : 'bg-gradient-to-b from-red-500/20 to-gray-900'
             }`}>
               {/* Icon */}
               <div className="text-6xl mb-3">
-                {isDraw ? '🤝' : iWon ? '🏆' : '💀'}
+                {iWon ? '🏆' : '💀'}
               </div>
 
               {/* Title */}
               <h2 className={`text-3xl font-black mb-1 ${
-                isDraw ? 'text-yellow-400' : iWon ? 'text-green-400' : 'text-red-400'
+                iWon ? 'text-green-400' : 'text-red-400'
               }`}>
-                {isDraw ? "IT'S A DRAW!" : iWon ? 'YOU WON!' : 'YOU LOST'}
+                {iWon ? 'YOU WON!' : 'YOU LOST'}
               </h2>
 
               <p className="text-gray-400 text-sm">
-                {isDraw
-                  ? 'Nobody wins this round'
-                  : iWon
-                    ? 'Congratulations, champion!'
-                    : 'Better luck next time'}
+                {iWon ? 'Congratulations, champion!' : 'Better luck next time'}
               </p>
             </div>
 
             {/* Amounts card */}
-            {matchData && !isDraw && (
+            {matchData && (
               <div className="bg-gray-900 px-6 pb-2">
                 <div className={`rounded-xl p-4 ${
                   iWon
@@ -226,10 +245,10 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
             )}
 
             {/* Settlement tx */}
-            {gameEnd.txHash && (
+            {(gameEnd.txHash || settlementTxHash) && (
               <div className="bg-gray-900 px-6 py-2 text-center">
                 <a
-                  href={`${BLOCK_EXPLORER_URL}/tx/${gameEnd.txHash}`}
+                  href={`${BLOCK_EXPLORER_URL}/tx/${gameEnd.txHash || settlementTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-400 hover:text-blue-300 text-xs underline"
@@ -239,7 +258,7 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
               </div>
             )}
 
-            {!gameEnd.txHash && !isDraw && (
+            {!gameEnd.txHash && !settlementTxHash && (
               <div className="bg-gray-900 px-6 py-2 text-center">
                 <p className="text-yellow-500 text-xs">Settlement processing...</p>
               </div>

@@ -21,7 +21,12 @@ export default function Home() {
 
   useEffect(() => {
     if (connectError) {
-      setError(connectError.message || 'Failed to connect');
+      const msg = connectError.message || 'Failed to connect';
+      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('credential')) {
+        setError('Account creation failed. Please make sure passkeys are enabled in your browser/device settings, then try again.');
+      } else {
+        setError(msg);
+      }
     }
   }, [connectError]);
 

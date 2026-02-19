@@ -19,8 +19,10 @@ const resultSignerWallet = new ethers.Wallet(
 // Escrow contract ABI (simplified - add full ABI after deployment)
 const ESCROW_ABI = [
   'function settle(bytes32 matchId, address winner, bytes32 score, uint256 timestamp, bytes signature) external',
+  'function settleDraw(bytes32 matchId, bytes32 score, uint256 timestamp, bytes signature) external',
   'function matches(bytes32 matchId) external view returns (tuple(bytes32 gameId, address playerA, address playerB, uint256 stakeAmount, address token, uint8 status, uint256 acceptBy, uint256 depositBy, uint256 settleBy, bool playerADeposited, bool playerBDeposited))',
   'event Settled(bytes32 indexed matchId, address indexed winner, uint256 payout, uint256 fee)',
+  'event DrawSettled(bytes32 indexed matchId, address indexed playerA, address indexed playerB, uint256 refundAmount)',
 ];
 
 const escrowContract = new ethers.Contract(

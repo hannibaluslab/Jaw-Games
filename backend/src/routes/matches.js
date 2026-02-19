@@ -12,6 +12,10 @@ router.post('/:matchId/created', MatchController.confirmMatchCreated);
 router.post('/:matchId/accepted', MatchController.confirmMatchAccepted);
 router.post('/:matchId/deposited', MatchController.confirmDeposit);
 
+// Session-based match endpoints (no wallet popup)
+router.post('/session/create', authMiddleware, MatchController.createMatchWithSession);
+router.post('/session/:matchId/accept', authMiddleware, MatchController.acceptMatchWithSession);
+
 // Get match details
 router.get('/:matchId', MatchController.getMatch);
 router.get('/:matchId/status', MatchController.getMatchStatus);

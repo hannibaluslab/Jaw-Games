@@ -95,9 +95,12 @@ class WebSocketService {
 
     // Get or create game session
     let session = await GameSession.findByMatchId(match.id);
-    if (!session && match.status === 'ready') {
+    if (!session && (match.status === 'ready' || (match.player_a_deposited && match.player_b_deposited))) {
       const gameState = TicTacToe.createGame(match.player_a_id, match.player_b_id);
       session = await GameSession.create(match.id, gameState, match.player_a_id);
+    }
+    // Ensure status is in_progress when session exists and game hasn't ended
+    if (session && !session.ended_at && match.status !== 'in_progress' && match.status !== 'settling' && match.status !== 'settled') {
       await Match.updateStatus(matchId, 'in_progress');
     }
 
@@ -174,21 +177,37 @@ class WebSocketService {
 
       // Check if game ended
       if (newState.winner) {
+        // If draw, reset board and start a new round (no settlement until a winner)
+        if (newState.winner === 'draw') {
+          // Swap who goes first each round
+          const newRoundState = TicTacToe.createGame(
+            newState.playerX,
+            newState.playerO
+          );
+          // Alternate starting player: if X started last round, O starts this one
+          const lastStarter = currentState.moves.length > 0 && currentState.moves[0].player === newState.playerX ? 'O' : 'X';
+          newRoundState.currentTurn = lastStarter;
+
+          await GameSession.updateGameState(
+            session.id,
+            newRoundState,
+            lastStarter === 'X' ? match.player_a_id : match.player_b_id
+          );
+
+          this.broadcastToMatch(matchId, null, {
+            type: 'new_round',
+            reason: 'draw',
+            gameState: newRoundState,
+          });
+          return;
+        }
+
+        // End the game session (only for actual winners, not draws)
         await GameSession.endGame(session.id, {
           winner: newState.winner,
           finalState: newState,
           endedAt: new Date(),
         });
-
-        // If draw, handle refund logic (not implemented in MVP)
-        if (newState.winner === 'draw') {
-          this.broadcastToMatch(matchId, null, {
-            type: 'game_ended',
-            result: 'draw',
-            gameState: newState,
-          });
-          return;
-        }
 
         // Get result
         const result = TicTacToe.getResult(newState);

@@ -91,6 +91,13 @@ contract MatchEscrow is Ownable, Pausable, ReentrancyGuard {
         uint256 amount
     );
 
+    event DrawSettled(
+        bytes32 indexed matchId,
+        address indexed playerA,
+        address indexed playerB,
+        uint256 refundAmount
+    );
+
     event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
     event FeeBpsUpdated(uint256 oldFeeBps, uint256 newFeeBps);
     event ResultSignerUpdated(address indexed oldSigner, address indexed newSigner);
@@ -327,6 +334,54 @@ contract MatchEscrow is Ownable, Pausable, ReentrancyGuard {
         matchData.status = MatchStatus.Settled;
 
         emit Settled(matchId, winner, payout, fee);
+    }
+
+    /**
+     * @notice Settle a match as a draw — refund both players
+     * @param matchId The match to settle as draw
+     * @param score Hash of the game score/result
+     * @param timestamp Timestamp of the result
+     * @param signature Backend signature proving authenticity
+     */
+    function settleDraw(
+        bytes32 matchId,
+        bytes32 score,
+        uint256 timestamp,
+        bytes memory signature
+    ) external whenNotPaused nonReentrant {
+        Match storage matchData = matches[matchId];
+
+        require(matchData.playerA != address(0), "Match does not exist");
+        require(matchData.status == MatchStatus.Deposited, "Invalid match status");
+
+        // Verify signature (winner = address(0) signals draw)
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            matchId,
+            address(0),
+            matchData.playerA,
+            matchData.playerB,
+            matchData.stakeAmount,
+            matchData.token,
+            score,
+            timestamp,
+            block.chainid,
+            address(this)
+        ));
+
+        address recoveredSigner = ECDSA.recover(
+            MessageHashUtils.toEthSignedMessageHash(messageHash),
+            signature
+        );
+
+        require(recoveredSigner == resultSigner, "Invalid signature");
+
+        // Refund both players their full stake
+        IERC20(matchData.token).safeTransfer(matchData.playerA, matchData.stakeAmount);
+        IERC20(matchData.token).safeTransfer(matchData.playerB, matchData.stakeAmount);
+
+        matchData.status = MatchStatus.Settled;
+
+        emit DrawSettled(matchId, matchData.playerA, matchData.playerB, matchData.stakeAmount);
     }
 
     /**

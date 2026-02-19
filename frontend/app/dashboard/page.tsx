@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { useAccount, useDisconnect, useReadContract, useSendCalls } from 'wagmi';
 import { useApi } from '@/lib/hooks/useApi';
+import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { getTokenSymbol, ENS_DOMAIN, USDC_ADDRESS, TOKENS, ERC20_ABI } from '@/lib/contracts';
 
@@ -21,6 +22,8 @@ function DashboardContent() {
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sendAmount, setSendAmount] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const { hasSession, isGranting, grantSession, checkSession, revokeSession, error: sessionError } = useSessionPermission();
 
   // Read USDC balance
   const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
@@ -43,15 +46,26 @@ function DashboardContent() {
     }
 
     const init = async () => {
-      const userRes = await api.getUserByAddress(address);
-      const resolvedUsername = userRes.data?.username || address.slice(0, 8);
+      // Retry getUserByAddress a few times (ENS propagation can be slow after account creation)
+      let userRes: Awaited<ReturnType<typeof api.getUserByAddress>> = { error: 'Not started' };
+      for (let attempt = 0; attempt < 5; attempt++) {
+        userRes = await api.getUserByAddress(address);
+        if (userRes.data) break;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      if (!userRes.data) {
+        // ENS never resolved — user needs to reconnect
+        setUsername(null);
+        setMatchesLoading(false);
+        return;
+      }
+
+      const resolvedUsername = userRes.data.username;
       setUsername(resolvedUsername);
       localStorage.setItem('username', resolvedUsername);
-
-      if (userRes.data?.id) {
-        localStorage.setItem('userId', userRes.data.id);
-        api.setAuthToken(userRes.data.id);
-      }
+      localStorage.setItem('userId', userRes.data.id);
+      api.setAuthToken(userRes.data.id);
 
       const [invitesRes, matchesRes, playersRes] = await Promise.all([
         api.getPendingInvites(resolvedUsername),
@@ -73,6 +87,9 @@ function DashboardContent() {
         );
       }
       setMatchesLoading(false);
+
+      // Check for active session
+      checkSession();
     };
 
     init();
@@ -107,11 +124,24 @@ function DashboardContent() {
     });
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await revokeSession();
     localStorage.clear();
     disconnect();
     router.push('/');
   };
+
+  if (!username && !matchesLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 p-4 text-center">
+        <p className="text-lg font-semibold mb-2">Account not found</p>
+        <p className="text-sm mb-4">Your username could not be resolved. Please sign out and try again.</p>
+        <button onClick={handleSignOut} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">
+          Sign Out & Retry
+        </button>
+      </div>
+    );
+  }
 
   if (!username) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500">Loading...</div>;
@@ -139,6 +169,29 @@ function DashboardContent() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 sm:py-12">
+        {/* Session Permission Banner */}
+        {!hasSession ? (
+          <div className="mb-4 sm:mb-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-yellow-800 text-sm">Enable popup-free gameplay</p>
+              <p className="text-yellow-700 text-xs mt-1">Grant a 1-hour game session to play without wallet popups.</p>
+              {sessionError && <p className="text-red-600 text-xs mt-1">{sessionError}</p>}
+            </div>
+            <button
+              onClick={grantSession}
+              disabled={isGranting}
+              className="bg-yellow-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-yellow-700 transition disabled:opacity-50 whitespace-nowrap"
+            >
+              {isGranting ? 'Granting...' : 'Grant Session'}
+            </button>
+          </div>
+        ) : (
+          <div className="mb-4 sm:mb-6 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <p className="text-green-800 text-sm font-medium">Session active — no wallet popups needed</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           {/* Games Card */}
           <button

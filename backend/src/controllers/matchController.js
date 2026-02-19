@@ -2,9 +2,11 @@ const { ethers } = require('ethers');
 const crypto = require('crypto');
 const Match = require('../models/Match');
 const User = require('../models/User');
+const Session = require('../models/Session');
 const GameSession = require('../models/GameSession');
 const ENSService = require('../services/ensService');
 const SettlementService = require('../services/settlementService');
+const SessionService = require('../services/sessionService');
 const TicTacToe = require('../games/tictactoe');
 
 class MatchController {
@@ -111,11 +113,16 @@ class MatchController {
       const { matchId } = req.params;
       const { txHash } = req.body;
 
-      const match = await Match.updateStatus(matchId, 'accepted');
-      if (!match) {
+      // Only transition to 'accepted' if currently 'created' (don't downgrade from ready/in_progress)
+      const current = await Match.findByMatchId(matchId);
+      if (!current) {
         return res.status(404).json({ error: 'Match not found' });
       }
+      if (current.status !== 'created') {
+        return res.json({ message: 'Match already accepted', match: current });
+      }
 
+      const match = await Match.updateStatus(matchId, 'accepted');
       res.json({ message: 'Match acceptance confirmed', match });
     } catch (error) {
       console.error('Confirm match accepted error:', error);
@@ -242,6 +249,145 @@ class MatchController {
     } catch (error) {
       console.error('Submit result error:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Create match via session permission (no wallet popup)
+   */
+  static async createMatchWithSession(req, res) {
+    try {
+      const { gameId, opponentUsername, stakeAmount, token } = req.body;
+      const { userId, address: userAddress } = req.user;
+
+      if (!gameId || !opponentUsername || !stakeAmount || !token) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Get active session
+      const session = await Session.findActiveByUserId(userId);
+      if (!session) {
+        return res.status(403).json({ error: 'No active session. Please grant a game session first.' });
+      }
+
+      const playerA = await User.findById(userId);
+      if (!playerA) return res.status(404).json({ error: 'User not found' });
+
+      const playerB = await User.findByUsername(opponentUsername);
+      if (!playerB) return res.status(404).json({ error: 'Opponent not found' });
+
+      // Generate matchId and deadlines server-side
+      const matchId = ethers.id(`match-${crypto.randomUUID()}-${Date.now()}`);
+      const gameIdHash = ethers.id(gameId);
+      const now = Math.floor(Date.now() / 1000);
+      const acceptBy = now + 86400;
+      const depositBy = now + 86400 + 3600;
+      const settleBy = now + 86400 + 3600 + 7200;
+
+      // Execute on-chain via session permission
+      const result = await SessionService.executeCreateMatch(session.permission_id, {
+        matchId,
+        gameIdHash,
+        opponentAddress: playerB.smart_account_address,
+        stakeAmount,
+        tokenAddress: token,
+        acceptBy,
+        depositBy,
+        settleBy,
+      });
+
+      // Create match in database
+      await Match.create({
+        matchId,
+        gameId,
+        playerAId: playerA.id,
+        playerBId: playerB.id,
+        stakeAmount,
+        tokenAddress: token,
+        acceptBy: new Date(acceptBy * 1000),
+        depositBy: new Date(depositBy * 1000),
+        settleBy: new Date(settleBy * 1000),
+      });
+
+      // Mark as created + deposited
+      await Match.updateStatus(matchId, 'created');
+      await Match.updateDeposit(matchId, playerA.id);
+
+      res.status(201).json({
+        matchId,
+        txBatchId: result.id,
+        opponentUsername: playerB.username,
+        message: 'Match created via session.',
+      });
+    } catch (error) {
+      console.error('Create match with session error:', error);
+      if (error.code === 'JAW_RPC_UNAVAILABLE') {
+        return res.status(503).json({ error: 'Session service temporarily unavailable. Please use wallet popup.', fallback: true });
+      }
+      if (error.message?.includes('permission') || error.message?.includes('Permission')) {
+        return res.status(403).json({ error: 'Session permission expired or invalid. Please grant a new session.', fallback: true });
+      }
+      res.status(500).json({ error: 'Failed to create match via session. Please try using wallet popup.', fallback: true });
+    }
+  }
+
+  /**
+   * Accept match via session permission (no wallet popup)
+   */
+  static async acceptMatchWithSession(req, res) {
+    try {
+      const { matchId } = req.params;
+      const { userId } = req.user;
+
+      // Get active session
+      const session = await Session.findActiveByUserId(userId);
+      if (!session) {
+        return res.status(403).json({ error: 'No active session. Please grant a game session first.', fallback: true });
+      }
+
+      const match = await Match.findByMatchId(matchId);
+      if (!match) return res.status(404).json({ error: 'Match not found' });
+
+      if (match.status !== 'created') {
+        return res.status(400).json({ error: 'Match cannot be accepted in current state' });
+      }
+
+      // Verify this user is player B
+      if (match.player_b_id !== userId) {
+        return res.status(403).json({ error: 'You are not the invited player' });
+      }
+
+      // Execute on-chain via session permission
+      const result = await SessionService.executeAcceptMatch(session.permission_id, {
+        matchId,
+        stakeAmount: match.stake_amount.toString(),
+        tokenAddress: match.token_address,
+      });
+
+      // Update DB: accepted + deposited → ready
+      await Match.updateStatus(matchId, 'accepted');
+      await Match.updateDeposit(matchId, userId);
+
+      // Reload to check if both deposited → ready
+      const updatedMatch = await Match.findByMatchId(matchId);
+      if (updatedMatch.status === 'ready') {
+        const gameState = TicTacToe.createGame(updatedMatch.player_a_id, updatedMatch.player_b_id);
+        await GameSession.create(updatedMatch.id, gameState, updatedMatch.player_a_id);
+      }
+
+      res.json({
+        txBatchId: result.id,
+        message: 'Match accepted via session.',
+      });
+    } catch (error) {
+      console.error('Accept match with session error:', error);
+      if (error.code === 'JAW_RPC_UNAVAILABLE') {
+        return res.status(503).json({ error: 'Session service temporarily unavailable. Please use wallet popup.', fallback: true });
+      }
+      if (error.message?.includes('permission') || error.message?.includes('Permission')) {
+        return res.status(403).json({ error: 'Session permission expired or invalid. Please grant a new session.', fallback: true });
+      }
+      res.status(500).json({ error: 'Failed to accept match via session. Please try using wallet popup.', fallback: true });
     }
   }
 

@@ -59,6 +59,20 @@ CREATE TABLE game_sessions (
 -- Create index on match_id
 CREATE INDEX idx_game_sessions_match_id ON game_sessions(match_id);
 
+-- Sessions table (ERC-7715 permission sessions)
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    permission_id VARCHAR(66) NOT NULL,
+    spender_address VARCHAR(42) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_sessions_permission_id ON sessions(permission_id);
+
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

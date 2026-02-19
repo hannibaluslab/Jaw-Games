@@ -3,6 +3,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 interface ApiResponse<T = any> {
   data?: T;
   error?: string;
+  fallback?: boolean; // Backend signals frontend should fall back to wallet popup
 }
 
 export class ApiClient {
@@ -39,7 +40,7 @@ export class ApiClient {
       const data = await response.json();
 
       if (!response.ok) {
-        return { error: data.error || 'Request failed' };
+        return { error: data.error || 'Request failed', fallback: data.fallback };
       }
 
       return { data };
@@ -134,6 +135,41 @@ export class ApiClient {
 
   async getPendingInvites(username: string): Promise<ApiResponse<{ invites: any[] }>> {
     return this.get(`/api/matches/invites/${username}`);
+  }
+
+  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+
+  // Session endpoints
+  async getSpenderAddress(): Promise<ApiResponse<{ spenderAddress: string }>> {
+    return this.get('/api/sessions/spender');
+  }
+
+  async createSession(data: { permissionId: string; expiresAt: number }): Promise<ApiResponse<{ id: string; permissionId: string; expiresAt: string }>> {
+    return this.post('/api/sessions', data);
+  }
+
+  async getActiveSession(): Promise<ApiResponse<{ active: boolean; permissionId?: string; expiresAt?: string }>> {
+    return this.get('/api/sessions/active');
+  }
+
+  async revokeSession(): Promise<ApiResponse<{ message: string }>> {
+    return this.delete('/api/sessions');
+  }
+
+  // Session-based match endpoints (no wallet popup)
+  async createMatchViaSession(data: {
+    gameId: string;
+    opponentUsername: string;
+    stakeAmount: string;
+    token: string;
+  }): Promise<ApiResponse<{ matchId: string; txBatchId: string; opponentUsername: string; message: string }>> {
+    return this.post('/api/matches/session/create', data);
+  }
+
+  async acceptMatchViaSession(matchId: string): Promise<ApiResponse<{ txBatchId: string; message: string }>> {
+    return this.post(`/api/matches/session/${matchId}/accept`);
   }
 }
 

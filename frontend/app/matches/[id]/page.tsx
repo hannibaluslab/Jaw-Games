@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useSendCalls } from 'wagmi';
 import { formatUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
+import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
 type Action = 'idle' | 'accepting' | 'depositing';
@@ -15,6 +16,7 @@ export default function MatchDetailsPage() {
   const matchId = params.id as string;
   const api = useApi();
   const { address } = useAccount();
+  const { hasSession, checkSession } = useSessionPermission();
 
   const [match, setMatch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -38,32 +40,80 @@ export default function MatchDetailsPage() {
 
   useEffect(() => {
     fetchMatch();
+    checkSession();
     const interval = setInterval(fetchMatch, 5000);
     return () => clearInterval(interval);
-  }, [fetchMatch]);
+  }, [fetchMatch, checkSession]);
 
   const isPlayerA = match && currentUsername === match.player_a_username;
   const isPlayerB = match && currentUsername === match.player_b_username;
   const myDeposited = isPlayerA ? match?.player_a_deposited : match?.player_b_deposited;
 
-  const handleAccept = () => {
+  // Accept + deposit via session API (no popup) or fallback to sendCalls
+  const handleAcceptAndDeposit = async () => {
     setAction('accepting');
     setError(null);
-    sendCalls({
-      calls: [{
-        to: ESCROW_CONTRACT_ADDRESS,
-        data: encodeFunctionData({
-          abi: ESCROW_ABI,
-          functionName: 'acceptMatch',
-          args: [matchId as `0x${string}`],
-        }),
-      }],
-    }, {
-      onSuccess: (result) => {
-        api.confirmMatchAccepted(matchId, result.id).then(() => {
+
+    // Session path: no wallet popup
+    if (hasSession) {
+      try {
+        const response = await api.acceptMatchViaSession(matchId);
+        if (response.error) {
+          // If backend says to fall back, proceed to wallet popup flow
+          if (response.fallback) {
+            console.log('Session API unavailable, falling back to wallet popup');
+            setAction('accepting');
+            // Fall through to wallet popup below
+          } else {
+            setError(response.error);
+            setAction('idle');
+            return;
+          }
+        } else {
           setAction('idle');
-          fetchMatch();
-        });
+          router.push(`/matches/${encodeURIComponent(matchId)}/play`);
+          return;
+        }
+      } catch (err: any) {
+        console.log('Session API error, falling back to wallet popup');
+        // Fall through to wallet popup
+      }
+    }
+
+    // Fallback: wallet popup flow
+    sendCalls({
+      calls: [
+        {
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'acceptMatch',
+            args: [matchId as `0x${string}`],
+          }),
+        },
+        {
+          to: match.token_address as `0x${string}`,
+          data: encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [ESCROW_CONTRACT_ADDRESS, BigInt(match.stake_amount)],
+          }),
+        },
+        {
+          to: ESCROW_CONTRACT_ADDRESS,
+          data: encodeFunctionData({
+            abi: ESCROW_ABI,
+            functionName: 'deposit',
+            args: [matchId as `0x${string}`],
+          }),
+        },
+      ],
+    }, {
+      onSuccess: async (result) => {
+        await api.confirmMatchAccepted(matchId, result.id);
+        await api.confirmDeposit(matchId, address!, result.id);
+        setAction('idle');
+        router.push(`/matches/${encodeURIComponent(matchId)}/play`);
       },
       onError: (err) => {
         setError(err.message || 'Transaction failed');
@@ -72,7 +122,7 @@ export default function MatchDetailsPage() {
     });
   };
 
-  // Batch approve + deposit in a single sendCalls (one tx via smart account)
+  // Batch approve + deposit for player A (when they need to deposit separately)
   const handleApproveAndDeposit = () => {
     setAction('depositing');
     setError(null);
@@ -236,17 +286,21 @@ export default function MatchDetailsPage() {
         )}
 
         {/* Action Buttons */}
+        {/* Player B: single button to accept + approve + deposit */}
         {match.status === 'created' && isPlayerB && (
           <button
-            onClick={handleAccept}
+            onClick={handleAcceptAndDeposit}
             disabled={isProcessing}
             className="w-full bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 text-base sm:text-lg"
           >
-            {action === 'accepting' ? 'Confirm in wallet...' : 'Accept Challenge'}
+            {action === 'accepting'
+              ? (hasSession ? 'Accepting match...' : 'Confirm in wallet...')
+              : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
         )}
 
-        {(match.status === 'accepted' || match.status === 'created') && !myDeposited && (isPlayerA || (isPlayerB && match.status === 'accepted')) && (
+        {/* Player A: deposit if not yet deposited */}
+        {(match.status === 'accepted' || match.status === 'created') && !myDeposited && isPlayerA && (
           <button
             onClick={handleApproveAndDeposit}
             disabled={isProcessing}
@@ -256,7 +310,7 @@ export default function MatchDetailsPage() {
           </button>
         )}
 
-        {(match.status === 'ready' || match.status === 'in_progress') && (
+        {(match.status === 'ready' || match.status === 'in_progress' || (match.player_a_deposited && match.player_b_deposited && match.status !== 'settled' && match.status !== 'settling')) && (
           <button
             onClick={() => router.push(`/matches/${encodeURIComponent(matchId)}/play`)}
             className="w-full bg-green-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-green-700 transition text-base sm:text-lg mt-4"
@@ -284,7 +338,7 @@ export default function MatchDetailsPage() {
           </div>
         )}
 
-        {isProcessing && (
+        {isProcessing && !hasSession && (
           <div className="mt-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded text-sm">
             Please confirm the transaction in your wallet.
           </div>

@@ -27,6 +27,7 @@ export function useGameWebSocket(matchId: string, userId: string) {
   const [connected, setConnected] = useState(false);
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drawFlash, setDrawFlash] = useState(false);
 
   useEffect(() => {
     if (!matchId || !userId) return;
@@ -68,6 +69,14 @@ export function useGameWebSocket(matchId: string, userId: string) {
             txHash: data.txHash,
             gameState: data.gameState,
           });
+          break;
+        case 'new_round':
+          // Draw — flash message then reset board
+          setDrawFlash(true);
+          setTimeout(() => {
+            setGameState(data.gameState);
+            setDrawFlash(false);
+          }, 1500);
           break;
         case 'player_joined':
           setOpponentConnected(true);
@@ -117,5 +126,5 @@ export function useGameWebSocket(matchId: string, userId: string) {
     }
   }, [matchId, userId]);
 
-  return { gameState, gameEnd, connected, opponentConnected, sendMove, error };
+  return { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash };
 }

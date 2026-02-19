@@ -165,6 +165,61 @@ class SettlementService {
       throw error;
     }
   }
+  /**
+   * Process draw result — refund both players on-chain
+   * @param {string} matchId - Match ID (bytes32 hex string)
+   * @param {object} gameResult - Game result data
+   * @returns {string} - Transaction hash
+   */
+  static async processDrawResult(matchId, gameResult) {
+    try {
+      const match = await Match.findByMatchId(matchId);
+      if (!match) {
+        throw new Error('Match not found');
+      }
+
+      if (match.status !== 'in_progress' && match.status !== 'ready') {
+        throw new Error(`Cannot settle match in status: ${match.status}`);
+      }
+
+      const score = ethers.id(JSON.stringify(gameResult));
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      // Sign with address(0) as winner to signal draw
+      const signature = await this.signResult(
+        matchId,
+        ethers.ZeroAddress,
+        match.player_a_address,
+        match.player_b_address,
+        match.stake_amount,
+        match.token_address,
+        score,
+        timestamp
+      );
+
+      await Match.updateStatus(matchId, 'settling');
+
+      console.log('Submitting draw settlement transaction...');
+      const tx = await escrowContract.settleDraw(
+        matchId,
+        score,
+        timestamp,
+        signature
+      );
+      console.log('Draw settlement tx submitted:', tx.hash);
+
+      const receipt = await tx.wait();
+      console.log('Draw settlement tx confirmed:', receipt.transactionHash);
+
+      // Settle as draw (no winner)
+      await Match.settle(matchId, null, receipt.transactionHash);
+
+      return receipt.transactionHash;
+    } catch (error) {
+      console.error('Error processing draw result:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = SettlementService;

@@ -158,13 +158,15 @@ class UserController {
         // JustaName lookup failed
       }
 
-      // Auto-register new users on first lookup
+      // Auto-register new users on first lookup — only if we resolved a real username
       if (!user) {
-        const username = jawUsername || `player_${address.slice(2, 8).toLowerCase()}`;
+        if (!jawUsername) {
+          return res.status(404).json({ error: 'User not found. Please try again.' });
+        }
 
         // Ensure username is unique
-        const existing = await User.findByUsername(username);
-        const finalUsername = existing ? `${username}_${Date.now().toString(36)}` : username;
+        const existing = await User.findByUsername(jawUsername);
+        const finalUsername = existing ? `${jawUsername}_${Date.now().toString(36)}` : jawUsername;
 
         const ensName = `${finalUsername}.lafung.eth`;
         user = await User.create(finalUsername, ensName, address);
