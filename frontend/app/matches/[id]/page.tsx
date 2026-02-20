@@ -53,7 +53,7 @@ export default function MatchDetailsPage() {
     setIsTxPending(true);
 
     try {
-      const result = await account.sendCalls([
+      const result = await account.sendTransaction([
         {
           to: ESCROW_CONTRACT_ADDRESS,
           data: encodeFunctionData({
@@ -78,9 +78,9 @@ export default function MatchDetailsPage() {
             args: [matchId as `0x${string}`],
           }),
         },
-      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
-      await api.confirmMatchAccepted(matchId, result.id);
-      await api.confirmDeposit(matchId, address!, result.id);
+      ], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      await api.confirmMatchAccepted(matchId, result);
+      await api.confirmDeposit(matchId, address!, result);
       setAction('idle');
       router.push(`/matches/${encodeURIComponent(matchId)}/play`);
     } catch (err: any) {
@@ -99,7 +99,7 @@ export default function MatchDetailsPage() {
     setIsTxPending(true);
 
     try {
-      const result = await account.sendCalls([
+      const result = await account.sendTransaction([
         {
           to: match.token_address as `0x${string}`,
           data: encodeFunctionData({
@@ -116,8 +116,8 @@ export default function MatchDetailsPage() {
             args: [matchId as `0x${string}`],
           }),
         },
-      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
-      await api.confirmDeposit(matchId, address!, result.id);
+      ], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      await api.confirmDeposit(matchId, address!, result);
       setAction('idle');
       fetchMatch();
     } catch (err: any) {
@@ -137,7 +137,7 @@ export default function MatchDetailsPage() {
       if (!account) return;
       setIsTxPending(true);
       try {
-        await account.sendCalls([
+        await account.sendTransaction([
           {
             to: ESCROW_CONTRACT_ADDRESS,
             data: encodeFunctionData({
@@ -146,7 +146,7 @@ export default function MatchDetailsPage() {
               args: [matchId as `0x${string}`],
             }),
           },
-        ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+        ], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
         await api.cancelMatch(matchId);
         setAction('idle');
         fetchMatch();

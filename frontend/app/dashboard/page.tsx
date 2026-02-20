@@ -118,14 +118,14 @@ function DashboardContent() {
     const amountInUnits = parseUnits(sendAmount, TOKENS.USDC.decimals);
     setIsSending(true);
     try {
-      await account.sendCalls([{
+      await account.sendTransaction([{
         to: USDC_ADDRESS,
         data: encodeFunctionData({
           abi: ERC20_ABI,
           functionName: 'transfer',
           args: [recipientAddress as `0x${string}`, amountInUnits],
         }),
-      }], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      }], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
       setSendingTo(null);
       setSendAmount('');
       fetchBalance();

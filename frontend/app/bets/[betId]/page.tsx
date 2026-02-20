@@ -230,7 +230,7 @@ export default function BetDetailPage() {
 
     setIsTxPending(true);
     try {
-      const result = await account.sendCalls([
+      const result = await account.sendTransaction([
         {
           to: tokenInfo.address,
           data: encodeFunctionData({
@@ -247,7 +247,7 @@ export default function BetDetailPage() {
             args: [betId as `0x${string}`, outcomeIdx, parsedAmount],
           }),
         },
-      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      ], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
 
       // Poll on-chain to verify the bet was placed
       let confirmed = false;
@@ -274,7 +274,7 @@ export default function BetDetailPage() {
         return;
       }
       try {
-        await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
+        await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result });
       } catch {
         // On-chain bet succeeded even if backend sync fails
       }
@@ -297,15 +297,15 @@ export default function BetDetailPage() {
     setIsTxPending(true);
 
     try {
-      const result = await account.sendCalls([{
+      const result = await account.sendTransaction([{
         to: BET_SETTLER_CONTRACT_ADDRESS,
         data: encodeFunctionData({
           abi: BET_SETTLER_ABI,
           functionName: 'claimWinnings',
           args: [betId as `0x${string}`],
         }),
-      }], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
-      await api.claimBetWinnings(betId, result.id);
+      }], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      await api.claimBetWinnings(betId, result);
       setActionLoading(false);
       fetchBet();
     } catch (err: any) {
@@ -323,15 +323,15 @@ export default function BetDetailPage() {
     setIsTxPending(true);
 
     try {
-      const result = await account.sendCalls([{
+      const result = await account.sendTransaction([{
         to: BET_SETTLER_CONTRACT_ADDRESS,
         data: encodeFunctionData({
           abi: BET_SETTLER_ABI,
           functionName: 'claimRefund',
           args: [betId as `0x${string}`],
         }),
-      }], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
-      await api.claimBetWinnings(betId, result.id);
+      }], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      await api.claimBetWinnings(betId, result);
       setActionLoading(false);
       fetchBet();
     } catch (err: any) {

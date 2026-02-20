@@ -69,7 +69,7 @@ function CreateMatchContent() {
     const settleBy = BigInt(now + 86400 + 3600 + 7200);
 
     try {
-      const result = await account.sendCalls([
+      const result = await account.sendTransaction([
         {
           to: tokenInfo.address,
           data: encodeFunctionData({
@@ -103,7 +103,7 @@ function CreateMatchContent() {
             args: [matchId],
           }),
         },
-      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      ], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
 
       setStep('confirming');
       // Poll on-chain to verify the match was actually created
@@ -136,7 +136,7 @@ function CreateMatchContent() {
         stakeAmount: stakeAmountParsed.toString(),
         token: tokenInfo.address,
         matchId,
-        txHash: result.id,
+        txHash: result,
         playerADeposited: true,
       });
       if (response.error) {
