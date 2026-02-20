@@ -51,6 +51,11 @@ export default function MatchDetailsPage() {
   // matches() returns [gameId, playerA, playerB, ...] as an array (not struct)
   useEffect(() => {
     if (!match || !publicClient || match.status !== 'created') return;
+    if (!ESCROW_CONTRACT_ADDRESS) {
+      console.warn('ESCROW_CONTRACT_ADDRESS not set, skipping on-chain check');
+      setOnChainVerified(true);
+      return;
+    }
     publicClient.readContract({
       address: ESCROW_CONTRACT_ADDRESS,
       abi: ESCROW_ABI,
@@ -59,7 +64,11 @@ export default function MatchDetailsPage() {
     }).then((result: any) => {
       const playerA = Array.isArray(result) ? result[1] : result.playerA;
       setOnChainVerified(playerA !== '0x0000000000000000000000000000000000000000');
-    }).catch(() => setOnChainVerified(false));
+    }).catch((err) => {
+      console.error('On-chain match verification failed, allowing interaction:', err);
+      // Don't block user on RPC failures — only block if we confirmed match doesn't exist
+      setOnChainVerified(true);
+    });
   }, [match, publicClient, matchId]);
 
   const isPlayerA = match && currentUsername === match.player_a_username;
