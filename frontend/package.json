@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@jaw.id/core": "^0.0.3",
-    "@jaw.id/ui": "^0.0.2",
-    "@jaw.id/wagmi": "^0.0.1",
+    "@jaw.id/ui": "^0.0.4",
+    "@jaw.id/wagmi": "^0.0.3",
     "@tanstack/react-query": "^5.90.20",
     "ethers": "^6.16.0",
     "next": "16.1.4",
