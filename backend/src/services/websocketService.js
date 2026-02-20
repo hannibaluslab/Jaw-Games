@@ -212,28 +212,30 @@ class WebSocketService {
         // Get result
         const result = TicTacToe.getResult(newState);
 
-        // Submit settlement (don't block game_ended broadcast on failure)
-        let txHash = null;
-        try {
-          txHash = await SettlementService.processMatchResult(
-            matchId,
-            result.winner,
-            {
-              finalState: newState,
-              winner: result.winner,
-              winningSymbol: result.winningSymbol,
-            }
-          );
-        } catch (settlementError) {
-          console.error('Settlement failed (will retry later):', settlementError.message);
-        }
-
+        // Broadcast game result immediately — don't wait for settlement
         this.broadcastToMatch(matchId, null, {
           type: 'game_ended',
           result: 'winner',
           winner: result.winner,
-          txHash,
           gameState: newState,
+        });
+
+        // Settle on-chain in background, broadcast tx hash when done
+        SettlementService.processMatchResult(
+          matchId,
+          result.winner,
+          {
+            finalState: newState,
+            winner: result.winner,
+            winningSymbol: result.winningSymbol,
+          }
+        ).then((txHash) => {
+          this.broadcastToMatch(matchId, null, {
+            type: 'settlement_complete',
+            txHash,
+          });
+        }).catch((settlementError) => {
+          console.error('Settlement failed:', settlementError.message);
         });
       }
     } catch (error) {

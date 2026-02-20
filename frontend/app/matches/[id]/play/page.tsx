@@ -40,11 +40,10 @@ export default function PlayGamePage() {
 function GameBoard({ matchId, userId, username }: { matchId: string; userId: string; username: string }) {
   const router = useRouter();
   const api = useApi();
-  const { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash } = useGameWebSocket(matchId, userId);
+  const { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash } = useGameWebSocket(matchId, userId);
 
   const [matchData, setMatchData] = useState<any>(null);
   const [showOverlay, setShowOverlay] = useState(false);
-  const [settlementTxHash, setSettlementTxHash] = useState<string | null>(null);
 
   // Fetch match details for stake/token info
   useEffect(() => {
@@ -62,20 +61,6 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
       return () => clearTimeout(timer);
     }
   }, [gameEnd]);
-
-  // Poll for settlement txHash if not included in game_ended event
-  useEffect(() => {
-    if (!gameEnd || gameEnd.txHash || settlementTxHash || gameEnd.result === 'draw') return;
-    const poll = setInterval(async () => {
-      const res = await api.getMatch(matchId);
-      const m = res.data?.match || res.data;
-      if (m?.settlement_tx_hash) {
-        setSettlementTxHash(m.settlement_tx_hash);
-        clearInterval(poll);
-      }
-    }, 3000);
-    return () => clearInterval(poll);
-  }, [gameEnd, settlementTxHash, api, matchId]);
 
   if (!connected) {
     return (
@@ -245,10 +230,10 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
             )}
 
             {/* Settlement tx */}
-            {(gameEnd.txHash || settlementTxHash) && (
+            {settlementTxHash ? (
               <div className="bg-gray-900 px-6 py-2 text-center">
                 <a
-                  href={`${BLOCK_EXPLORER_URL}/tx/${gameEnd.txHash || settlementTxHash}`}
+                  href={`${BLOCK_EXPLORER_URL}/tx/${settlementTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-400 hover:text-blue-300 text-xs underline"
@@ -256,11 +241,9 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
                   View settlement on BaseScan
                 </a>
               </div>
-            )}
-
-            {!gameEnd.txHash && !settlementTxHash && (
+            ) : (
               <div className="bg-gray-900 px-6 py-2 text-center">
-                <p className="text-yellow-500 text-xs">Settlement processing...</p>
+                <p className="text-gray-500 text-xs">Settling on-chain...</p>
               </div>
             )}
 

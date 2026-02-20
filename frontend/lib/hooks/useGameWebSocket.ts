@@ -28,6 +28,7 @@ export function useGameWebSocket(matchId: string, userId: string) {
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawFlash, setDrawFlash] = useState(false);
+  const [settlementTxHash, setSettlementTxHash] = useState<string | null>(null);
 
   useEffect(() => {
     if (!matchId || !userId) return;
@@ -78,6 +79,9 @@ export function useGameWebSocket(matchId: string, userId: string) {
             setDrawFlash(false);
           }, 1500);
           break;
+        case 'settlement_complete':
+          setSettlementTxHash(data.txHash);
+          break;
         case 'player_joined':
           setOpponentConnected(true);
           break;
@@ -126,5 +130,5 @@ export function useGameWebSocket(matchId: string, userId: string) {
     }
   }, [matchId, userId]);
 
-  return { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash };
+  return { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash };
 }
