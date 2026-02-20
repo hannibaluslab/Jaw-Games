@@ -26,6 +26,26 @@ const C = {
 };
 const ghostColors = [C.ghostRed, C.ghostPink, C.ghostCyan, C.ghostOrange];
 
+/* ── Responsive CSS ── */
+const responsiveCSS = `
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+* { box-sizing: border-box; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+
+.jaw-main { max-width: 100%; margin: 0 auto; }
+.jaw-actions { display: flex; flex-direction: column; gap: 12px; }
+.jaw-players-grid { display: flex; flex-direction: column; gap: 8px; }
+
+@media (min-width: 640px) {
+  .jaw-main { max-width: 1024px; }
+  .jaw-actions { flex-direction: row; gap: 16px; }
+  .jaw-actions > button { flex: 1; }
+  .jaw-players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+`;
+
 /* ── SVG Components ── */
 const PacManMouth = ({ size = 24 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24">
@@ -233,7 +253,7 @@ function DashboardContent() {
   if (!username && !matchesLoading) {
     return (
       <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Press Start 2P', 'Courier New', monospace", display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center' }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
+        <style>{responsiveCSS}</style>
         <p style={{ fontSize: 12, color: C.pacYellow, marginBottom: 10 }}>Account not found</p>
         <p style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>Your username could not be resolved. Please sign out and try again.</p>
         <button onClick={handleSignOut} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 8, background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 3px 0 #B8960A' }}>
@@ -246,7 +266,7 @@ function DashboardContent() {
   if (!username) {
     return (
       <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Press Start 2P', 'Courier New', monospace", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
+        <style>{responsiveCSS}</style>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <PacManMouth size={28} />
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Loading...</span>
@@ -258,13 +278,7 @@ function DashboardContent() {
   /* ── Main Dashboard ── */
   return (
     <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Press Start 2P', 'Courier New', monospace", position: 'relative', overflow: 'hidden' }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
-      `}</style>
+      <style>{responsiveCSS}</style>
 
       {/* Floating dots background */}
       {Array.from({ length: 30 }, (_, i) => (
@@ -277,7 +291,7 @@ function DashboardContent() {
       ))}
 
       {/* ===== HEADER ===== */}
-      <div style={{ padding: '20px 20px 0' }}>
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <PacManMouth size={32} />
@@ -319,64 +333,66 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* ===== ACTION CARDS ===== */}
-      <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Play */}
-        <button
-          onClick={() => router.push('/games')}
-          style={{ width: '100%', padding: '22px 20px', background: `linear-gradient(135deg, ${C.playYellow}, #FFC107)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B8960A, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left' }}
-        >
-          <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <PlayIcon />
-          </div>
-          <div>
-            <div style={{ fontSize: 14, color: '#1a3a8a', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Play</div>
-            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(26,58,138,0.8)' }}>
-              Challenge someone to Tic-Tac-Toe
+      {/* ===== ACTION CARDS — stacked on mobile, 3-col grid on desktop ===== */}
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
+        <div className="jaw-actions">
+          {/* Play */}
+          <button
+            onClick={() => router.push('/games')}
+            style={{ padding: '22px 20px', background: `linear-gradient(135deg, ${C.playYellow}, #FFC107)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B8960A, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left' }}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <PlayIcon />
             </div>
-          </div>
-        </button>
+            <div>
+              <div style={{ fontSize: 14, color: '#1a3a8a', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Play</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(26,58,138,0.8)' }}>
+                Challenge someone to Tic-Tac-Toe
+              </div>
+            </div>
+          </button>
 
-        {/* LifeBet */}
-        <button
-          onClick={() => router.push('/bets')}
-          style={{ width: '100%', padding: '22px 20px', background: `linear-gradient(135deg, ${C.betOrange}, #FF6B35)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B85A20, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left' }}
-        >
-          <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <CubeIcon />
-          </div>
-          <div>
-            <div style={{ fontSize: 14, color: 'white', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>LifeBet</div>
-            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
-              Bet on real life events
+          {/* LifeBet */}
+          <button
+            onClick={() => router.push('/bets')}
+            style={{ padding: '22px 20px', background: `linear-gradient(135deg, ${C.betOrange}, #FF6B35)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B85A20, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left' }}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CubeIcon />
             </div>
-          </div>
-        </button>
+            <div>
+              <div style={{ fontSize: 14, color: 'white', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>LifeBet</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+                Bet on real life events
+              </div>
+            </div>
+          </button>
 
-        {/* Invites */}
-        <button
-          onClick={() => router.push('/invites')}
-          style={{ width: '100%', padding: '22px 20px', background: `linear-gradient(135deg, ${C.invitePink}, #FF4D6D)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B83A55, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left', position: 'relative' }}
-        >
-          <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MailIcon />
-          </div>
-          <div>
-            <div style={{ fontSize: 14, color: 'white', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Invites</div>
-            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
-              View pending challenges
+          {/* Invites */}
+          <button
+            onClick={() => router.push('/invites')}
+            style={{ padding: '22px 20px', background: `linear-gradient(135deg, ${C.invitePink}, #FF4D6D)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B83A55, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left', position: 'relative' }}
+          >
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <MailIcon />
             </div>
-          </div>
-          {inviteCount > 0 && (
-            <div style={{ position: 'absolute', top: 10, right: 14, background: C.ghostRed, color: 'white', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Press Start 2P', monospace" }}>
-              {inviteCount}
+            <div>
+              <div style={{ fontSize: 14, color: 'white', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Invites</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+                View pending challenges
+              </div>
             </div>
-          )}
-        </button>
+            {inviteCount > 0 && (
+              <div style={{ position: 'absolute', top: 10, right: 14, background: C.ghostRed, color: 'white', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Press Start 2P', monospace" }}>
+                {inviteCount}
+              </div>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ===== QUICK BET MODE ===== */}
-      <div style={{ padding: '20px 20px 0' }}>
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
         <div style={{ background: 'rgba(0,0,30,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '14px 18px' }}>
           {hasSession && sessionExpiresAt ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -430,8 +446,8 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* ===== PLAYERS ===== */}
-      <div style={{ padding: '24px 20px 0' }}>
+      {/* ===== PLAYERS — stacked on mobile, 2-col grid on desktop ===== */}
+      <div className="jaw-main" style={{ padding: '24px 20px 0' }}>
         <h2 style={{ fontSize: 13, color: C.dotWhite, margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', gap: 4 }}>{[1,2,3].map(i => <Dot key={i} size={4} />)}</div>
           Players
@@ -445,7 +461,7 @@ function DashboardContent() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="jaw-players-grid">
             {players.map((player, i) => (
               <div key={player.id}>
                 <div style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s' }}>
@@ -474,7 +490,6 @@ function DashboardContent() {
                   </div>
                 </div>
 
-                {/* Send USDC expandable panel */}
                 {sendingTo === player.id && (
                   <div style={{ background: 'rgba(0,0,30,0.3)', border: '1px solid rgba(0,229,255,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '10px 14px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -508,7 +523,7 @@ function DashboardContent() {
       </div>
 
       {/* ===== RECENT MATCHES ===== */}
-      <div style={{ padding: '24px 20px 40px' }}>
+      <div className="jaw-main" style={{ padding: '24px 20px 40px' }}>
         <h2 style={{ fontSize: 13, color: C.dotWhite, margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
           <PowerPellet size={8} /> Recent Matches
         </h2>
