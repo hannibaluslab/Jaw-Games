@@ -95,6 +95,19 @@ class WebSocketService {
 
     // Get or create game session
     let session = await GameSession.findByMatchId(match.id);
+
+    // Detect stale session with wrong state structure (e.g. TicTacToe state for a backgammon match)
+    if (session && !session.ended_at) {
+      const gs = typeof session.game_state === 'string' ? JSON.parse(session.game_state) : session.game_state;
+      const gameId = match.game_id || 'tictactoe';
+      const isWrongState = (gameId === 'backgammon' && !gs.borneOff) || (gameId === 'tictactoe' && !gs.cells);
+      if (isWrongState) {
+        console.log(`Deleting stale game session for match ${matchId} (wrong state for ${gameId})`);
+        await GameSession.deleteByMatchId(match.id);
+        session = null;
+      }
+    }
+
     if (!session && (match.status === 'ready' || (match.player_a_deposited && match.player_b_deposited))) {
       const engine = getGameEngine(match.game_id || 'tictactoe');
       const gameState = engine.createGame(match.player_a_id, match.player_b_id);
