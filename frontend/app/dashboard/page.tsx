@@ -123,6 +123,9 @@ function DashboardContent() {
   const [isSending, setIsSending] = useState(false);
   const [usdcBalance, setUsdcBalance] = useState<bigint | undefined>(undefined);
   const [spendLimit, setSpendLimit] = useState('100');
+  const [selectedPlayer, setSelectedPlayer] = useState<{ id: string; username: string; ensName: string; smartAccountAddress: string; index: number } | null>(null);
+  const [playerMatches, setPlayerMatches] = useState<any[]>([]);
+  const [playerStatsLoading, setPlayerStatsLoading] = useState(false);
 
   const { hasSession, isGranting, isRevoking, expiresAt: sessionExpiresAt, error: sessionError, grantSession, revokeSession } = useSessionPermission();
 
@@ -248,6 +251,30 @@ function DashboardContent() {
     signOut();
     router.push('/');
   };
+
+  const openPlayerProfile = async (player: typeof players[0], index: number) => {
+    setSelectedPlayer({ ...player, index });
+    setPlayerStatsLoading(true);
+    setPlayerMatches([]);
+    try {
+      const res = await api.getUserMatches(player.username);
+      if (res.data) setPlayerMatches(res.data.matches || []);
+    } catch {}
+    setPlayerStatsLoading(false);
+  };
+
+  const closePlayerProfile = () => {
+    setSelectedPlayer(null);
+    setPlayerMatches([]);
+  };
+
+  const playerStats = (() => {
+    if (!selectedPlayer) return { wins: 0, losses: 0, total: 0, winRate: 0 };
+    const settled = playerMatches.filter((m: any) => m.status === 'settled');
+    const wins = settled.filter((m: any) => m.winner_username === selectedPlayer.username).length;
+    const losses = settled.filter((m: any) => m.winner_username && m.winner_username !== selectedPlayer.username).length;
+    return { wins, losses, total: settled.length, winRate: (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0 };
+  })();
 
   /* ── Loading / Error States ── */
   if (!username && !matchesLoading) {
@@ -463,35 +490,36 @@ function DashboardContent() {
         ) : (
           <div className="jaw-players-grid">
             {players.map((player, i) => (
-              <div key={player.id}>
+              <div
+                key={player.id}
+                onClick={() => openPlayerProfile(player, i)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
                     <Ghost size={22} color={ghostColors[i % 4]} />
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 9, color: C.dotWhite }}>{player.username}</div>
                       <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.45)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.ensName}</div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyAddress(player.smartAccountAddress); }}
-                        style={{ background: 'none', border: 'none', fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,255,255,0.25)', cursor: 'pointer', padding: 0, marginTop: 1, transition: 'color 0.15s' }}
-                      >
-                        {copiedAddress === player.smartAccountAddress ? 'Copied!' : truncateAddress(player.smartAccountAddress)}
-                      </button>
+                      <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>
+                        {truncateAddress(player.smartAccountAddress)}
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     <button
-                      onClick={() => { setSendingTo(sendingTo === player.id ? null : player.id); setSendAmount(''); setSendError(null); }}
+                      onClick={(e) => { e.stopPropagation(); setSendingTo(sendingTo === player.id ? null : player.id); setSendAmount(''); setSendError(null); }}
                       style={{ fontFamily: 'inherit', fontSize: 6, padding: '7px 10px', background: 'rgba(0,229,255,0.15)', color: C.ghostCyan, border: '1px solid rgba(0,229,255,0.3)', borderRadius: 7, cursor: 'pointer', transition: 'all 0.15s' }}
                     >SEND</button>
                     <button
-                      onClick={() => router.push(`/create-match?opponent=${player.username}`)}
+                      onClick={(e) => { e.stopPropagation(); router.push(`/create-match?opponent=${player.username}`); }}
                       style={{ fontFamily: 'inherit', fontSize: 6, padding: '7px 8px', background: 'rgba(255,215,0,0.15)', color: C.pacYellow, border: '1px solid rgba(255,215,0,0.3)', borderRadius: 7, cursor: 'pointer', transition: 'all 0.15s' }}
                     >CHALLENGE</button>
                   </div>
                 </div>
 
                 {sendingTo === player.id && (
-                  <div style={{ background: 'rgba(0,0,30,0.3)', border: '1px solid rgba(0,229,255,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '10px 14px' }}>
+                  <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(0,0,30,0.3)', border: '1px solid rgba(0,229,255,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '10px 14px' }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <input
                         type="number"
@@ -521,6 +549,103 @@ function DashboardContent() {
           </div>
         )}
       </div>
+
+      {/* ===== PLAYER PROFILE POPUP ===== */}
+      {selectedPlayer && (
+        <div
+          onClick={closePlayerProfile}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(0,0,30,0.95)', border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto', position: 'relative' }}
+          >
+            {/* Close button */}
+            <button
+              onClick={closePlayerProfile}
+              style={{ position: 'absolute', top: 12, right: 14, background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 16, cursor: 'pointer', fontFamily: "'Courier New', monospace", lineHeight: 1 }}
+            >X</button>
+
+            {/* Ghost + Name */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 20 }}>
+              <Ghost size={48} color={ghostColors[selectedPlayer.index % 4]} />
+              <div style={{ fontSize: 14, color: C.dotWhite, marginTop: 10 }}>{selectedPlayer.username}</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>{selectedPlayer.ensName}</div>
+            </div>
+
+            {/* Full address */}
+            <div style={{ background: 'rgba(0,0,30,0.5)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 12px', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>WALLET ADDRESS</div>
+              <button
+                onClick={() => copyAddress(selectedPlayer.smartAccountAddress)}
+                style={{ background: 'none', border: 'none', fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', padding: 0, wordBreak: 'break-all', textAlign: 'left', lineHeight: 1.5, transition: 'color 0.15s' }}
+              >
+                {copiedAddress === selectedPlayer.smartAccountAddress ? 'Copied!' : selectedPlayer.smartAccountAddress}
+              </button>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <div style={{ flex: 1, background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, color: '#00FF88' }}>{playerStatsLoading ? '...' : playerStats.wins}</div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(0,255,136,0.6)', marginTop: 4 }}>WINS</div>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, color: C.ghostRed }}>{playerStatsLoading ? '...' : playerStats.losses}</div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,68,68,0.6)', marginTop: 4 }}>LOSSES</div>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, color: C.pacYellow }}>{playerStatsLoading ? '...' : `${playerStats.winRate}%`}</div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,215,0,0.6)', marginTop: 4 }}>WIN RATE</div>
+              </div>
+            </div>
+
+            {/* Recent matches */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Dot size={4} /> RECENT MATCHES
+              </div>
+              {playerStatsLoading ? (
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '8px 0' }}>Loading...</div>
+              ) : playerMatches.filter((m: any) => m.status === 'settled').length === 0 ? (
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '8px 0' }}>No completed matches</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {playerMatches.filter((m: any) => m.status === 'settled').slice(0, 5).map((match: any) => {
+                    const opponent = match.player_a_username === selectedPlayer.username ? match.player_b_username : match.player_a_username;
+                    const won = match.winner_username === selectedPlayer.username;
+                    const stake = Number(formatUnits(BigInt(match.stake_amount), 6));
+                    return (
+                      <div key={match.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <PacManMouth size={14} />
+                          <span style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,255,255,0.6)' }}>vs {opponent}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,215,0,0.7)' }}>{stake} USDC</span>
+                          <span style={{ fontSize: 7, color: won ? '#00FF88' : C.ghostRed }}>{won ? 'WON' : 'LOST'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { closePlayerProfile(); setSendingTo(selectedPlayer.id); setSendAmount(''); setSendError(null); }}
+                style={{ flex: 1, fontFamily: "'Press Start 2P', monospace", fontSize: 8, padding: '12px 10px', background: 'rgba(0,229,255,0.15)', color: C.ghostCyan, border: '1px solid rgba(0,229,255,0.3)', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}
+              >SEND USDC</button>
+              <button
+                onClick={() => { closePlayerProfile(); router.push(`/create-match?opponent=${selectedPlayer.username}`); }}
+                style={{ flex: 1, fontFamily: "'Press Start 2P', monospace", fontSize: 8, padding: '12px 10px', background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 3px 0 #B8960A', transition: 'all 0.15s' }}
+              >CHALLENGE</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== RECENT MATCHES ===== */}
       <div className="jaw-main" style={{ padding: '24px 20px 40px' }}>
