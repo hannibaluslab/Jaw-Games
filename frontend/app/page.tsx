@@ -69,19 +69,24 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
         <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-4">
-      <div className="text-center space-y-8 w-full max-w-md">
-        <h1 className="text-5xl sm:text-6xl font-bold text-white mb-4">JAW Games</h1>
-        <p className="text-lg sm:text-xl text-white/90">
-          Competitive gaming with crypto staking on Base
-        </p>
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-4">
+      <div className="text-center w-full max-w-md space-y-8">
+        {/* Title — hidden on the passkey screen */}
+        {mode !== 'passkey-modal' && (
+          <>
+            <h1 className="text-5xl sm:text-6xl font-bold text-white mb-4">JAW Games</h1>
+            <p className="text-lg sm:text-xl text-white/90">
+              Competitive gaming with crypto staking on Base
+            </p>
+          </>
+        )}
 
         {/* Sign In / Sign Up choice */}
         {mode === 'choose' && (
@@ -120,7 +125,7 @@ export default function Home() {
 
         {/* Sign Up: username input */}
         {mode === 'signup' && (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-32">
             <div>
               <input
                 type="text"
@@ -128,6 +133,14 @@ export default function Home() {
                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
                 placeholder="Choose a username"
                 autoFocus
+                onFocus={(e) => {
+                  const target = e.target;
+                  setTimeout(() => {
+                    const rect = target.getBoundingClientRect();
+                    const targetY = window.innerHeight * 0.3;
+                    window.scrollBy({ top: rect.top - targetY, behavior: 'smooth' });
+                  }, 300);
+                }}
                 className="w-full px-4 py-4 rounded-lg text-lg text-gray-900 bg-white focus:ring-2 focus:ring-white/50 focus:outline-none"
               />
             </div>
@@ -147,66 +160,90 @@ export default function Home() {
           </div>
         )}
 
-        {/* Passkey educational modal */}
+        {/* Passkey educational screen */}
         {mode === 'passkey-modal' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 text-left shadow-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                About Passkeys
-              </h2>
-              <div className="text-sm text-gray-700 space-y-3 leading-relaxed">
-                <p>
-                  You&apos;re about to create your JAW Games account using passkey technology.
-                </p>
-                <p>
-                  Instead of an email and password, a passkey is a unique credential generated specifically for this app and this account. It is stored securely in your cloud keychain — iCloud Keychain on Apple devices, Google Password Manager on Android — and syncs automatically across all your devices. This means you can sign in to JAW Games from your phone, tablet, or any device connected to your cloud account, without ever setting up a new password.
-                </p>
-                <p>
-                  Your passkey can only be activated with your face or fingerprint, so even if someone had access to your device or your cloud account, they couldn&apos;t sign in without your biometrics.
-                </p>
-                <p>
-                  Your face or fingerprint never leaves your device. We don&apos;t store it. The passkey is tied only to this account — a second account would have its own separate passkey.
-                </p>
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 sm:p-8 shadow-2xl border border-white/20 flex flex-col max-h-[80dvh]">
+            {/* Centered fingerprint icon + title */}
+            <div className="flex flex-col items-center mb-5 shrink-0">
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mb-4">
+                <svg
+                  className="w-7 h-7 text-white"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
+                  <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
+                  <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" />
+                  <path d="M2 12a10 10 0 0 1 18-6" />
+                  <path d="M2 16h.01" />
+                  <path d="M21.8 16c.2-2 .131-5.354 0-6" />
+                  <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2" />
+                  <path d="M8.65 22c.21-.66.45-1.32.57-2" />
+                  <path d="M9 6.8a6 6 0 0 1 9 5.2v2" />
+                </svg>
               </div>
-              <div className="mt-6 space-y-3">
-                <button
-                  onClick={handleCreateAccount}
-                  disabled={isPending}
-                  className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                >
-                  {isPending ? (
-                    <span className="flex items-center">
-                      <svg
-                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Creating account...
-                    </span>
-                  ) : (
-                    'Create Account'
-                  )}
-                </button>
-                <a
-                  href="https://docs.jaw.id"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-center text-blue-600 hover:text-blue-700 py-2 text-sm font-medium"
-                >
-                  Learn More
-                </a>
-                <button
-                  onClick={() => setMode('signup')}
-                  disabled={isPending}
-                  className="block w-full text-center text-gray-500 hover:text-gray-700 py-1 text-sm disabled:opacity-50"
-                >
-                  Go back
-                </button>
-              </div>
+              <h2 className="text-2xl font-bold text-white">No Password. Just You.</h2>
+            </div>
+
+            {/* Scrollable body text */}
+            <div className="overflow-y-auto flex-1 min-h-0 space-y-4 text-left text-sm leading-relaxed text-white/75 px-1">
+              <p>
+                Your JAW Games account is secured by a{' '}
+                <span className="font-semibold text-white">passkey</span>, activated only by your{' '}
+                <span className="font-semibold text-white">face or fingerprint</span>. No passwords
+                to remember, no seed phrases to lose.
+              </p>
+              <p>
+                It{' '}
+                <span className="font-semibold text-white">syncs automatically</span> across your
+                devices through iCloud Keychain or Google Password Manager. Sign in from anywhere,
+                instantly.
+              </p>
+              <p>
+                <span className="font-semibold text-white">
+                  No one can sign in without your biometrics.
+                </span>{' '}
+                Even if someone got access to your device or your cloud account, they&apos;d still
+                need your face or fingerprint to get in.
+              </p>
+            </div>
+
+            {/* Fixed CTA area */}
+            <div className="mt-5 space-y-3 shrink-0">
+              <button
+                onClick={handleCreateAccount}
+                disabled={isPending}
+                className="w-full bg-white text-blue-600 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isPending ? (
+                  <span className="flex items-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Creating account...
+                  </span>
+                ) : (
+                  'Create My Account'
+                )}
+              </button>
+              <a
+                href="https://docs.jaw.id"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center text-white/70 hover:text-white py-2 text-sm font-medium"
+              >
+                Learn how passkeys work
+              </a>
             </div>
           </div>
         )}
@@ -217,9 +254,11 @@ export default function Home() {
           </div>
         )}
 
-        <div className="mt-12 text-white/70 text-sm">
-          <p>Stake USDC or USDT &bull; {WINNER_SHARE * 100}% to the winner &bull; No app needed</p>
-        </div>
+        {mode !== 'passkey-modal' && (
+          <div className="mt-12 text-white/70 text-sm">
+            <p>Stake USDC or USDT &bull; {WINNER_SHARE * 100}% to the winner &bull; No app needed</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -75,12 +75,32 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setIsPending(true);
     setError(null);
     try {
-      const acct = await Account.create(accountConfig, {
-        username,
-        rpId: typeof window !== 'undefined' ? window.location.hostname : undefined,
-        rpName: 'JAW Games',
-      });
-      setAccount(acct);
+      // Enforce native platform authenticator to prevent third-party password managers
+      // (e.g. 1Password) from hijacking the passkey creation dialog.
+      const origCreate = navigator.credentials.create.bind(navigator.credentials);
+      navigator.credentials.create = async function (options?: CredentialCreationOptions) {
+        if (options?.publicKey) {
+          options.publicKey.authenticatorSelection = {
+            ...options.publicKey.authenticatorSelection,
+            authenticatorAttachment: 'platform',
+            residentKey: 'required',
+            userVerification: 'required',
+          };
+          // WebAuthn Level 3 hint — tells the browser to prefer the built-in authenticator
+          try { (options.publicKey as any).hints = ['client-device']; } catch {}
+        }
+        return origCreate(options);
+      };
+      try {
+        const acct = await Account.create(accountConfig, {
+          username,
+          rpId: typeof window !== 'undefined' ? window.location.hostname : undefined,
+          rpName: 'JAW Games',
+        });
+        setAccount(acct);
+      } finally {
+        navigator.credentials.create = origCreate;
+      }
     } catch (err: any) {
       const msg = err.message || 'Account creation failed';
       if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('credential')) {
