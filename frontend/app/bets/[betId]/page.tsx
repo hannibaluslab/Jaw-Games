@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { useJawAccount } from '@/lib/contexts/AccountContext';
-import { publicClient } from '@/lib/account';
+import { publicClient, JAW_PAYMASTER_URL } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
 import {
   BET_SETTLER_CONTRACT_ADDRESS,
@@ -15,6 +15,7 @@ import {
   LIFEBET_WINNER_SHARE,
   getTokenSymbol,
   BLOCK_EXPLORER_URL,
+  USDC_ADDRESS,
 } from '@/lib/contracts';
 
 export default function BetDetailPage() {
@@ -246,7 +247,7 @@ export default function BetDetailPage() {
             args: [betId as `0x${string}`, outcomeIdx, parsedAmount],
           }),
         },
-      ]);
+      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
 
       // Poll on-chain to verify the bet was placed
       let confirmed = false;
@@ -303,7 +304,7 @@ export default function BetDetailPage() {
           functionName: 'claimWinnings',
           args: [betId as `0x${string}`],
         }),
-      }]);
+      }], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
       await api.claimBetWinnings(betId, result.id);
       setActionLoading(false);
       fetchBet();
@@ -329,7 +330,7 @@ export default function BetDetailPage() {
           functionName: 'claimRefund',
           args: [betId as `0x${string}`],
         }),
-      }]);
+      }], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
       await api.claimBetWinnings(betId, result.id);
       setActionLoading(false);
       fetchBet();

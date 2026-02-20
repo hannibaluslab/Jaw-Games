@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { useJawAccount } from '@/lib/contexts/AccountContext';
-import { publicClient } from '@/lib/account';
+import { publicClient, JAW_PAYMASTER_URL } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { getTokenSymbol, ENS_DOMAIN, USDC_ADDRESS, TOKENS, ERC20_ABI } from '@/lib/contracts';
@@ -125,7 +125,7 @@ function DashboardContent() {
           functionName: 'transfer',
           args: [recipientAddress as `0x${string}`, amountInUnits],
         }),
-      }]);
+      }], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
       setSendingTo(null);
       setSendAmount('');
       fetchBalance();

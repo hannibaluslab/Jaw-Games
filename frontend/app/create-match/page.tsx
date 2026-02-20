@@ -4,9 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
 import { useJawAccount } from '@/lib/contexts/AccountContext';
-import { publicClient } from '@/lib/account';
+import { publicClient, JAW_PAYMASTER_URL } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
-import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
+import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN, USDC_ADDRESS } from '@/lib/contracts';
 
 type Step = 'form' | 'signing' | 'confirming' | 'saving' | 'done';
 
@@ -103,7 +103,7 @@ function CreateMatchContent() {
             args: [matchId],
           }),
         },
-      ]);
+      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
 
       setStep('confirming');
       // Poll on-chain to verify the match was actually created

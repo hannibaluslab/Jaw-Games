@@ -4,8 +4,9 @@ import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { formatUnits, encodeFunctionData } from 'viem';
 import { useJawAccount } from '@/lib/contexts/AccountContext';
+import { JAW_PAYMASTER_URL } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
-import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
+import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL, USDC_ADDRESS } from '@/lib/contracts';
 
 type Action = 'idle' | 'accepting' | 'depositing' | 'cancelling';
 
@@ -77,7 +78,7 @@ export default function MatchDetailsPage() {
             args: [matchId as `0x${string}`],
           }),
         },
-      ]);
+      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
       await api.confirmMatchAccepted(matchId, result.id);
       await api.confirmDeposit(matchId, address!, result.id);
       setAction('idle');
@@ -115,7 +116,7 @@ export default function MatchDetailsPage() {
             args: [matchId as `0x${string}`],
           }),
         },
-      ]);
+      ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
       await api.confirmDeposit(matchId, address!, result.id);
       setAction('idle');
       fetchMatch();
@@ -145,7 +146,7 @@ export default function MatchDetailsPage() {
               args: [matchId as `0x${string}`],
             }),
           },
-        ]);
+        ], undefined, JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
         await api.cancelMatch(matchId);
         setAction('idle');
         fetchMatch();
