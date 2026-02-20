@@ -57,12 +57,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       const acct = await Account.get(accountConfig);
       setAccount(acct);
     } catch (err: any) {
+      console.error('Sign in error:', err);
       const msg = err.message || 'Sign in failed';
-      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('credential')) {
-        setError('Sign in failed. Please make sure passkeys are enabled in your browser/device settings, then try again.');
-      } else {
-        setError(msg);
-      }
+      setError(msg);
     } finally {
       setIsPending(false);
     }
