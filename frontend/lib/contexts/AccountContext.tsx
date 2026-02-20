@@ -54,14 +54,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setIsPending(true);
     setError(null);
     try {
-      const acct = await Account.get(accountConfig);
+      // Get stored accounts to find a credentialId for WebAuthn sign-in
+      const storedAccounts = Account.getStoredAccounts(JAW_API_KEY);
+      if (storedAccounts.length === 0) {
+        setError('No account found. Please sign up first.');
+        return;
+      }
+      // Pass credentialId to trigger the biometric prompt
+      const acct = await Account.get(accountConfig, storedAccounts[0].credentialId);
       setAccount(acct);
     } catch (err: any) {
       console.error('Sign in error:', err);
       const msg = err.message || 'Sign in failed';
-      if (msg.includes('Not authenticated') || msg.includes('create an account first')) {
-        setError('No account found. Please sign up first.');
-      } else if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('AbortError')) {
+      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('AbortError')) {
         setError('Sign in was cancelled. Please try again.');
       } else {
         setError(msg);
