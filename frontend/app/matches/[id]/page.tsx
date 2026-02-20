@@ -27,7 +27,7 @@ export default function MatchDetailsPage() {
   const publicClient = usePublicClient();
 
   const currentUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
-  const [onChainVerified, setOnChainVerified] = useState<boolean | null>(null);
+  const [onChainVerified, setOnChainVerified] = useState<boolean | null>(true);
 
   const fetchMatch = useCallback(async () => {
     const response = await api.getMatch(matchId);
