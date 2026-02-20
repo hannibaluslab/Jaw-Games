@@ -68,10 +68,10 @@ class UserController {
         return res.status(400).json({ error: 'Username already taken' });
       }
 
-      // Verify ENS resolution
-      const resolvedAddress = await ENSService.resolveENS(ensName);
-      if (!resolvedAddress || resolvedAddress.toLowerCase() !== smartAccountAddress.toLowerCase()) {
-        return res.status(400).json({ error: 'ENS name does not resolve to provided address' });
+      // Check if address already registered
+      const existingAddress = await User.findByAddress(smartAccountAddress);
+      if (existingAddress) {
+        return res.status(400).json({ error: 'Address already registered' });
       }
 
       // Create user
