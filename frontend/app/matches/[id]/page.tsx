@@ -48,6 +48,7 @@ export default function MatchDetailsPage() {
   }, [fetchMatch, checkSession]);
 
   // Verify match exists on-chain before allowing interactions
+  // matches() returns [gameId, playerA, playerB, ...] as an array (not struct)
   useEffect(() => {
     if (!match || !publicClient || match.status !== 'created') return;
     publicClient.readContract({
@@ -56,7 +57,8 @@ export default function MatchDetailsPage() {
       functionName: 'matches',
       args: [matchId as `0x${string}`],
     }).then((result: any) => {
-      setOnChainVerified(result.playerA !== '0x0000000000000000000000000000000000000000');
+      const playerA = Array.isArray(result) ? result[1] : result.playerA;
+      setOnChainVerified(playerA !== '0x0000000000000000000000000000000000000000');
     }).catch(() => setOnChainVerified(false));
   }, [match, publicClient, matchId]);
 

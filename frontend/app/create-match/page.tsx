@@ -147,7 +147,8 @@ function CreateMatchContent() {
               functionName: 'matches',
               args: [matchId as `0x${string}`],
             }) as any;
-            if (onChain.playerA && onChain.playerA !== '0x0000000000000000000000000000000000000000') {
+            const playerA = Array.isArray(onChain) ? onChain[1] : onChain.playerA;
+            if (playerA && playerA !== '0x0000000000000000000000000000000000000000') {
               confirmed = true;
               break;
             }
