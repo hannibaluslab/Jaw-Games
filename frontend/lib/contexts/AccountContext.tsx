@@ -59,8 +59,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       console.error('Sign in error:', err);
       const msg = err.message || 'Sign in failed';
-      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('credential') || msg.includes('AbortError')) {
-        setError('Sign in was cancelled or failed. Please try again.');
+      if (msg.includes('Not authenticated') || msg.includes('create an account first')) {
+        setError('No account found. Please sign up first.');
+      } else if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('AbortError')) {
+        setError('Sign in was cancelled. Please try again.');
       } else {
         setError(msg);
       }
