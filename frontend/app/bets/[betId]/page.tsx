@@ -198,7 +198,7 @@ export default function BetDetailPage() {
     return `${minutes}m`;
   };
 
-  const handlePlaceBet = (outcomeIdx: number) => {
+  const handlePlaceBet = async (outcomeIdx: number) => {
     if (!address) return;
     if (!BET_SETTLER_CONTRACT_ADDRESS) {
       setError('BetSettler contract address not configured. Contact support.');
@@ -206,6 +206,24 @@ export default function BetDetailPage() {
     }
     setError(null);
     setActionLoading(true);
+
+    // Pre-flight: check if user already has an on-chain bet (prevents confusing revert)
+    try {
+      const existing = await publicClient!.readContract({
+        address: BET_SETTLER_CONTRACT_ADDRESS,
+        abi: BET_SETTLER_ABI,
+        functionName: 'bettors',
+        args: [betId as `0x${string}`, address as `0x${string}`],
+      }) as [number, bigint, boolean];
+      if (Number(existing[0]) > 0) {
+        // Bet exists on-chain but DB may be out of sync — notify backend
+        await api.placeBet(betId, { outcome: Number(existing[0]), amount: existing[1].toString() });
+        setError(null);
+        setActionLoading(false);
+        fetchBet();
+        return;
+      }
+    } catch {}
 
     const tokenInfo = bet.token_address?.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? TOKENS.USDT : TOKENS.USDC;
     const parsedAmount = parseUnits(betAmount || formatUnits(BigInt(bet.stake_amount), 6), 6);
@@ -256,7 +274,11 @@ export default function BetDetailPage() {
             setActionLoading(false);
             return;
           }
-          await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
+          try {
+            await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
+          } catch {
+            // On-chain bet succeeded even if backend sync fails
+          }
           setSelectedOutcome(null);
           setBetAmount('');
           setActionLoading(false);
