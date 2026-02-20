@@ -36,9 +36,7 @@ export default function BetDetailPage() {
   const [selectedOutcome, setSelectedOutcome] = useState<number | null>(null);
   const [betAmount, setBetAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [spendLimit, setSpendLimit] = useState('100');
-
-  const { hasSession, isGranting, isRevoking, expiresAt: sessionExpiresAt, error: sessionError, grantSession, revokeSession } = useSessionPermission();
+  const { hasSession } = useSessionPermission();
 
   // Replace judge state
   const [replacingJudge, setReplacingJudge] = useState<string | null>(null);
@@ -200,15 +198,6 @@ export default function BetDetailPage() {
     if (days > 0) return `${days}d ${hours}h`;
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
-  };
-
-  const getSessionTimeLeft = () => {
-    if (!sessionExpiresAt) return '';
-    const diff = sessionExpiresAt.getTime() - Date.now();
-    if (diff <= 0) return 'Expired';
-    const mins = Math.floor(diff / 60000);
-    if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-    return `${mins}m`;
   };
 
   const handlePlaceBet = async (outcomeIdx: number) => {
@@ -791,56 +780,6 @@ export default function BetDetailPage() {
           </div>
           {canReplaceJudges && judges.some((j: any) => j.invite_status === 'declined') && (
             <p className="text-xs text-orange-600 mt-3">Some judges declined. Replace them to proceed.</p>
-          )}
-        </div>
-
-        {/* Session permission */}
-        <div className="bg-white rounded-xl shadow p-5">
-          {hasSession && sessionExpiresAt ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-sm text-green-700 font-medium">
-                  Session active &mdash; {getSessionTimeLeft()}
-                </span>
-              </div>
-              <button
-                onClick={revokeSession}
-                disabled={isRevoking}
-                className="text-xs text-gray-400 hover:text-red-500 transition"
-              >
-                {isRevoking ? 'Revoking...' : 'Revoke'}
-              </button>
-            </div>
-          ) : (
-            <>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Quick Bet Mode</h2>
-              <p className="text-xs text-gray-400 mb-3">Grant a 1-hour session to bet without Face ID each time</p>
-              <div className="flex gap-2 mb-3">
-                <div className="relative flex-1">
-                  <input
-                    type="number"
-                    value={spendLimit}
-                    onChange={(e) => setSpendLimit(e.target.value)}
-                    min="1"
-                    step="1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                    placeholder="100"
-                  />
-                  <div className="absolute right-3 top-2 text-xs text-gray-400">{tokenSymbol}/hr</div>
-                </div>
-              </div>
-              <button
-                onClick={() => grantSession(spendLimit)}
-                disabled={isGranting || !spendLimit || Number(spendLimit) <= 0}
-                className="w-full bg-teal-500 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-teal-600 transition disabled:opacity-50"
-              >
-                {isGranting ? 'Granting...' : 'Enable Session (1h)'}
-              </button>
-              {sessionError && (
-                <p className="text-xs text-red-500 mt-2">{sessionError}</p>
-              )}
-            </>
           )}
         </div>
 
