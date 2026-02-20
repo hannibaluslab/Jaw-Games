@@ -147,6 +147,10 @@ function CreateMatchContent() {
       setStep('done');
       router.push(`/matches/${encodeURIComponent(matchId)}`);
     } catch (err: any) {
+      if (err?.code === 4001) {
+        setStep('form'); // EIP-1193: User rejected
+        return;
+      }
       setError(err.message || 'Transaction failed');
       setStep('form');
     }

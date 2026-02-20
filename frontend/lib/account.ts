@@ -2,11 +2,12 @@
 
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
+import { JAW_PAYMASTER_URL as JAW_PAYMASTER_BASE_URL } from '@jaw.id/core';
 
 export const JAW_API_KEY = process.env.NEXT_PUBLIC_JAW_API_KEY!;
 
-// JAW SDK's built-in ERC-20 paymaster — lets users pay gas with USDC/USDT
-export const JAW_PAYMASTER_URL = `https://api.justaname.id/proxy/v1/rpc/erc20-paymaster?chainId=84532&api-key=${JAW_API_KEY}`;
+// Construct full paymaster URL from SDK base URL
+export const JAW_PAYMASTER_URL = `${JAW_PAYMASTER_BASE_URL}?chainId=${baseSepolia.id}&api-key=${JAW_API_KEY}`;
 
 export const accountConfig = {
   chainId: baseSepolia.id,

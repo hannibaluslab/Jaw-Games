@@ -84,6 +84,7 @@ export default function MatchDetailsPage() {
       setAction('idle');
       router.push(`/matches/${encodeURIComponent(matchId)}/play`);
     } catch (err: any) {
+      if (err?.code === 4001) { setAction('idle'); return; } // EIP-1193: User rejected
       setError(err.message || 'Transaction failed');
       setAction('idle');
     } finally {
@@ -121,6 +122,7 @@ export default function MatchDetailsPage() {
       setAction('idle');
       fetchMatch();
     } catch (err: any) {
+      if (err?.code === 4001) { setAction('idle'); return; } // EIP-1193: User rejected
       setError(err.message || 'Transaction failed');
       setAction('idle');
     } finally {
@@ -151,6 +153,7 @@ export default function MatchDetailsPage() {
         setAction('idle');
         fetchMatch();
       } catch (err: any) {
+        if (err?.code === 4001) { setAction('idle'); return; } // EIP-1193: User rejected
         setError(err.message || 'Cancel failed');
         setAction('idle');
       } finally {

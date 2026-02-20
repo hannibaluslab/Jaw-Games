@@ -130,6 +130,7 @@ function DashboardContent() {
       setSendAmount('');
       fetchBalance();
     } catch (err: any) {
+      if (err?.code === 4001) return; // EIP-1193: User rejected
       setSendError(err.message || 'Transfer failed');
     } finally {
       setIsSending(false);

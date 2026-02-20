@@ -13,7 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@jaw.id/core": "^0.0.1",
+    "@jaw.id/core": "^0.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "ethers": "^6.16.0",

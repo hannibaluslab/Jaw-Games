@@ -60,12 +60,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       setAccount(acct);
     } catch (err: any) {
       console.error('Sign in error:', err);
-      const msg = err.message || 'Sign in failed';
-      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('AbortError')) {
-        setError('Sign in was cancelled. Please try again.');
-      } else {
-        setError(msg);
+      if (err?.code === 4001) {
+        // EIP-1193: User rejected — not an error condition
+        return;
       }
+      setError(err.message || 'Sign in failed');
     } finally {
       setIsPending(false);
     }
@@ -97,17 +96,21 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           rpId: typeof window !== 'undefined' ? window.location.hostname : undefined,
           rpName: 'JAW Games',
         });
+        // Store credentialId for deterministic account recovery
+        const metadata = acct.getMetadata();
+        if (metadata?.credentialId) {
+          localStorage.setItem('jaw_credentialId', metadata.credentialId);
+        }
         setAccount(acct);
       } finally {
         navigator.credentials.create = origCreate;
       }
     } catch (err: any) {
-      const msg = err.message || 'Account creation failed';
-      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('credential')) {
-        setError('Account creation failed. Please make sure passkeys are enabled in your browser/device settings, then try again.');
-      } else {
-        setError(msg);
+      if (err?.code === 4001) {
+        // EIP-1193: User rejected — not an error condition
+        return;
       }
+      setError(err.message || 'Account creation failed');
     } finally {
       setIsPending(false);
     }

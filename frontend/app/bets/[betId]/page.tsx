@@ -283,6 +283,7 @@ export default function BetDetailPage() {
       setActionLoading(false);
       fetchBet();
     } catch (err: any) {
+      if (err?.code === 4001) { setActionLoading(false); return; } // EIP-1193: User rejected
       setError(err.message || 'Transaction failed');
       setActionLoading(false);
     } finally {
@@ -309,6 +310,7 @@ export default function BetDetailPage() {
       setActionLoading(false);
       fetchBet();
     } catch (err: any) {
+      if (err?.code === 4001) { setActionLoading(false); return; } // EIP-1193: User rejected
       setError(err.message || 'Claim failed');
       setActionLoading(false);
     } finally {
@@ -335,6 +337,7 @@ export default function BetDetailPage() {
       setActionLoading(false);
       fetchBet();
     } catch (err: any) {
+      if (err?.code === 4001) { setActionLoading(false); return; } // EIP-1193: User rejected
       setError(err.message || 'Refund failed');
       setActionLoading(false);
     } finally {
