@@ -26,8 +26,6 @@ async function startServer() {
 
     server.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
-      console.log(`   HTTP: http://localhost:${PORT}`);
-      console.log(`   WebSocket: ws://localhost:${PORT}/ws`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
