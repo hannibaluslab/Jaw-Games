@@ -40,8 +40,8 @@ class BetController {
         return res.status(400).json({ error: 'At least 2 outcomes required' });
       }
 
-      if (!Array.isArray(judgeUsernames) || judgeUsernames.length < 2 || judgeUsernames.length % 2 === 0) {
-        return res.status(400).json({ error: 'Judges must be an odd number >= 2' });
+      if (!Array.isArray(judgeUsernames) || judgeUsernames.length < 3 || judgeUsernames.length % 2 === 0) {
+        return res.status(400).json({ error: 'Judges must be an odd number >= 3' });
       }
 
       const creator = await User.findById(userId);
@@ -202,6 +202,11 @@ class BetController {
       const bet = await Bet.findByBetId(betId);
       if (!bet) {
         return res.status(404).json({ error: 'Bet not found' });
+      }
+
+      const outcomes = bet.outcomes || [];
+      if (outcome > outcomes.length) {
+        return res.status(400).json({ error: `Invalid outcome: must be between 1 and ${outcomes.length}` });
       }
 
       if (bet.status !== 'open') {

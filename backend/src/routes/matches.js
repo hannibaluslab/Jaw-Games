@@ -8,9 +8,9 @@ const router = express.Router();
 router.post('/', authMiddleware, MatchController.createMatch);
 
 // Confirmation endpoints (called by frontend after blockchain tx)
-router.post('/:matchId/created', MatchController.confirmMatchCreated);
-router.post('/:matchId/accepted', MatchController.confirmMatchAccepted);
-router.post('/:matchId/deposited', MatchController.confirmDeposit);
+router.post('/:matchId/created', authMiddleware, MatchController.confirmMatchCreated);
+router.post('/:matchId/accepted', authMiddleware, MatchController.confirmMatchAccepted);
+router.post('/:matchId/deposited', authMiddleware, MatchController.confirmDeposit);
 
 // Session-based match endpoints (no wallet popup)
 router.post('/session/create', authMiddleware, MatchController.createMatchWithSession);

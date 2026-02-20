@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGrantPermissions } from '@jaw.id/wagmi';
 import { useApi } from './useApi';
-import { ESCROW_CONTRACT_ADDRESS, USDC_ADDRESS } from '@/lib/contracts';
+import { ESCROW_CONTRACT_ADDRESS, BET_SETTLER_CONTRACT_ADDRESS, USDC_ADDRESS, USDT_ADDRESS } from '@/lib/contracts';
 
 export function useSessionPermission() {
   const api = useApi();
@@ -45,17 +45,29 @@ export function useSessionPermission() {
         spender: spenderAddress as `0x${string}`,
         permissions: {
           calls: [
-            // ERC-20 approve
+            // ERC-20 approve (both tokens)
             { target: USDC_ADDRESS, functionSignature: 'approve(address,uint256)' },
+            { target: USDT_ADDRESS, functionSignature: 'approve(address,uint256)' },
             // Escrow contract functions
             { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'createMatch(bytes32,bytes32,address,uint256,address,uint256,uint256,uint256)' },
             { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'acceptMatch(bytes32)' },
             { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'deposit(bytes32)' },
+            // BetSettler contract functions
+            ...(BET_SETTLER_CONTRACT_ADDRESS ? [
+              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'createBet(bytes32,uint256,address,uint256,uint256)' },
+              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'placeBet(bytes32,uint8,uint256)' },
+            ] : []),
           ],
           spends: [
             {
               token: USDC_ADDRESS,
               allowance: '100000000', // 100 USDC (6 decimals)
+              unit: 'hour' as const,
+              multiplier: 1,
+            },
+            {
+              token: USDT_ADDRESS,
+              allowance: '100000000', // 100 USDT (6 decimals)
               unit: 'hour' as const,
               multiplier: 1,
             },

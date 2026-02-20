@@ -7,7 +7,7 @@ export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ||
   '0x036CbD53842c5426634e7929541eC2318f3dCF7e') as Address;
 
 export const USDT_ADDRESS = (process.env.NEXT_PUBLIC_USDT_ADDRESS ||
-  '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2') as Address;
+  '0x036CbD53842c5426634e7929541eC2318f3dCF7e') as Address;
 
 export const TOKENS = {
   USDC: {

@@ -101,30 +101,6 @@ CREATE TRIGGER update_matches_updated_at BEFORE UPDATE ON matches
 -- 'cancelled' - Match cancelled
 -- 'refunded' - Match refunded
 
--- Sample queries for reference:
-
--- Get user by username
--- SELECT * FROM users WHERE username = $1;
-
--- Get user's matches
--- SELECT m.*,
---        ua.username as player_a_username,
---        ub.username as player_b_username,
---        uw.username as winner_username
--- FROM matches m
--- JOIN users ua ON m.player_a_id = ua.id
--- JOIN users ub ON m.player_b_id = ub.id
--- LEFT JOIN users uw ON m.winner_id = uw.id
--- WHERE m.player_a_id = $1 OR m.player_b_id = $1
--- ORDER BY m.created_at DESC;
-
--- Get pending invites for a user
--- SELECT m.*, ua.username as challenger_username
--- FROM matches m
--- JOIN users ua ON m.player_a_id = ua.id
--- WHERE m.player_b_id = $1 AND m.status IN ('created', 'pending_creation')
--- ORDER BY m.created_at DESC;
-
 -- =============================================
 -- LifeBet Tables
 -- =============================================
@@ -172,6 +148,7 @@ CREATE TABLE bet_participants (
     user_id UUID NOT NULL REFERENCES users(id),
     role VARCHAR(20) NOT NULL, -- 'bettor' or 'judge'
     outcome SMALLINT, -- 1-indexed (bettors pick)
+    amount BIGINT DEFAULT 0, -- bettor's stake amount (6 decimals)
     vote SMALLINT, -- 1-indexed (judges vote)
     invite_status VARCHAR(20) DEFAULT 'pending', -- pending/accepted/declined
     deposited BOOLEAN DEFAULT FALSE,

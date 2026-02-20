@@ -18,7 +18,7 @@ const { privateKeyToAccount } = require('viem/accounts');
 const { baseSepolia } = require('viem/chains');
 
 // Deployer key (contract owner, can call cancelMatch after deadline)
-const DEPLOYER_KEY = '0xfc76c76b110a03ff06e6a9e106be23e17cef1bf96beca35e510fa2e36add11fa';
+const DEPLOYER_KEY = process.env.DEPLOYER_PRIVATE_KEY;
 
 const OLD_CONTRACT = '0xd9F8d9B40C246b8c9d7B47b7Ae15Da6cb7fA2eF3';
 const VERY_OLD_CONTRACT = '0xeB69238c52770E3C009855e7815f883fD9B719F1';

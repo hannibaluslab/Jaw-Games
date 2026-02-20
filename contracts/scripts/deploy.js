@@ -7,9 +7,9 @@ async function main() {
   const feeRecipient = process.env.FEE_RECIPIENT_ADDRESS;
   const resultSigner = process.env.RESULT_SIGNER_ADDRESS;
 
-  // Base Sepolia testnet addresses (using same testnet USDC for both)
-  const USDC_BASE = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-  const USDT_BASE = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+  // Token addresses (Base Sepolia uses same USDC for both; override via env for mainnet)
+  const USDC_BASE = process.env.USDC_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+  const USDT_BASE = process.env.USDT_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 
   // Validate addresses
   if (!feeRecipient || !resultSigner) {
