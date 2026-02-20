@@ -233,6 +233,7 @@ export default function BetDetailPage() {
       }, {
         onSuccess: async (result) => {
           // Poll on-chain to verify the bet was placed
+          // bettors() returns [outcome, amount, claimed] as an array (not struct)
           let confirmed = false;
           for (let i = 0; i < 20; i++) {
             try {
@@ -241,8 +242,9 @@ export default function BetDetailPage() {
                 abi: BET_SETTLER_ABI,
                 functionName: 'bettors',
                 args: [betId as `0x${string}`, address as `0x${string}`],
-              }) as any;
-              if (bettorInfo.outcome && bettorInfo.outcome > 0) {
+              }) as [number, bigint, boolean];
+              const onChainOutcome = Number(bettorInfo[0]);
+              if (onChainOutcome > 0) {
                 confirmed = true;
                 break;
               }

@@ -17,12 +17,12 @@ export const config = createConfig({
       preference: {
         showTestnets: true,
       },
-      // paymasters: {
-      //   [baseSepolia.id]: {
-      //     url: `https://api.justaname.id/proxy/v1/rpc/erc20-paymaster?chainId=${baseSepolia.id}&api-key=${JAW_API_KEY}`,
-      //     context: { token: USDC_ADDRESS },
-      //   },
-      // },
+      paymasters: {
+        [baseSepolia.id]: {
+          url: `https://api.justaname.id/proxy/v1/rpc/erc20-paymaster?chainId=${baseSepolia.id}&api-key=${JAW_API_KEY}`,
+          context: { token: USDC_ADDRESS },
+        },
+      },
     }),
   ],
   transports: {
