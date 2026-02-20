@@ -2,10 +2,10 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { useAccount, useSendCalls, usePublicClient } from 'wagmi';
 import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
+import { publicClient } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
-import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
 
 type Step = 'form' | 'signing' | 'confirming' | 'saving' | 'done';
@@ -14,8 +14,7 @@ function CreateMatchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const api = useApi();
-  const { address, isConnected, status } = useAccount();
-  const { hasSession, checkSession } = useSessionPermission();
+  const { address, isConnected, isLoading, account } = useJawAccount();
 
   const [opponentUsername, setOpponentUsername] = useState('');
   const [opponentAddress, setOpponentAddress] = useState<string | null>(null);
@@ -25,12 +24,9 @@ function CreateMatchContent() {
   const [error, setError] = useState<string | null>(null);
   const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
 
-  const { sendCalls, isPending: isTxPending } = useSendCalls();
-  const publicClient = usePublicClient();
-
-  // Load players list + check session
+  // Load players list
   useEffect(() => {
-    if (status === 'connecting' || status === 'reconnecting') return;
+    if (isLoading) return;
     if (!isConnected) {
       router.push('/');
       return;
@@ -40,8 +36,7 @@ function CreateMatchContent() {
         setPlayers(res.data.players);
       }
     });
-    checkSession();
-  }, [isConnected, status, router, api, checkSession]);
+  }, [isConnected, isLoading, router, api]);
 
   // Pre-fill opponent from query param
   useEffect(() => {
@@ -57,38 +52,13 @@ function CreateMatchContent() {
     setOpponentAddress(player?.smartAccountAddress || null);
   }, [opponentUsername, players]);
 
-  const handleCreateMatch = () => {
-    if (!opponentUsername || !stakeAmount || !address || !opponentAddress) return;
+  const handleCreateMatch = async () => {
+    if (!opponentUsername || !stakeAmount || !address || !opponentAddress || !account) return;
 
     const tokenInfo = TOKENS[token];
     const stakeAmountParsed = parseUnits(stakeAmount, tokenInfo.decimals);
 
     setError(null);
-
-    // Session path: no wallet popup, all async is fine
-    if (hasSession) {
-      setStep('saving');
-      api.createMatchViaSession({
-        gameId: 'tictactoe',
-        opponentUsername,
-        stakeAmount: stakeAmountParsed.toString(),
-        token: tokenInfo.address,
-      }).then((response) => {
-        if (response.error) {
-          setError(response.error);
-          setStep('form');
-        } else {
-          setStep('done');
-          router.push(`/matches/${encodeURIComponent(response.data!.matchId)}`);
-        }
-      }).catch((err: any) => {
-        setError(err.message || 'Session create failed');
-        setStep('form');
-      });
-      return;
-    }
-
-    // Wallet popup path: sendCalls must be synchronous from click
     setStep('signing');
 
     const matchId = keccak256(toHex(`match-${crypto.randomUUID()}-${Date.now()}`));
@@ -98,8 +68,8 @@ function CreateMatchContent() {
     const depositBy = BigInt(now + 86400 + 3600);
     const settleBy = BigInt(now + 86400 + 3600 + 7200);
 
-    sendCalls({
-      calls: [
+    try {
+      const result = await account.sendCalls([
         {
           to: tokenInfo.address,
           data: encodeFunctionData({
@@ -133,63 +103,60 @@ function CreateMatchContent() {
             args: [matchId],
           }),
         },
-      ],
-    }, {
-      onSuccess: async (result) => {
-        setStep('confirming');
-        // Poll on-chain to verify the match was actually created
-        let confirmed = false;
-        for (let i = 0; i < 20; i++) {
-          try {
-            const onChain = await publicClient!.readContract({
-              address: ESCROW_CONTRACT_ADDRESS,
-              abi: ESCROW_ABI,
-              functionName: 'matches',
-              args: [matchId as `0x${string}`],
-            }) as any;
-            const playerA = Array.isArray(onChain) ? onChain[1] : onChain.playerA;
-            if (playerA && playerA !== '0x0000000000000000000000000000000000000000') {
-              confirmed = true;
-              break;
-            }
-          } catch {}
-          await new Promise(r => setTimeout(r, 3000));
-        }
-        if (!confirmed) {
-          setError('Transaction was not confirmed on-chain. Please try again.');
-          setStep('form');
-          return;
-        }
-        setStep('saving');
-        const response = await api.createMatch({
-          gameId: 'tictactoe',
-          opponentUsername,
-          stakeAmount: stakeAmountParsed.toString(),
-          token: tokenInfo.address,
-          matchId,
-          txHash: result.id,
-          playerADeposited: true,
-        });
-        if (response.error) {
-          setError(response.error);
-          setStep('form');
-          return;
-        }
-        setStep('done');
-        router.push(`/matches/${encodeURIComponent(matchId)}`);
-      },
-      onError: (err) => {
-        setError(err.message || 'Transaction failed');
+      ]);
+
+      setStep('confirming');
+      // Poll on-chain to verify the match was actually created
+      let confirmed = false;
+      for (let i = 0; i < 20; i++) {
+        try {
+          const onChain = await publicClient.readContract({
+            address: ESCROW_CONTRACT_ADDRESS,
+            abi: ESCROW_ABI,
+            functionName: 'matches',
+            args: [matchId as `0x${string}`],
+          }) as any;
+          const playerA = Array.isArray(onChain) ? onChain[1] : onChain.playerA;
+          if (playerA && playerA !== '0x0000000000000000000000000000000000000000') {
+            confirmed = true;
+            break;
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      if (!confirmed) {
+        setError('Transaction was not confirmed on-chain. Please try again.');
         setStep('form');
-      },
-    });
+        return;
+      }
+      setStep('saving');
+      const response = await api.createMatch({
+        gameId: 'tictactoe',
+        opponentUsername,
+        stakeAmount: stakeAmountParsed.toString(),
+        token: tokenInfo.address,
+        matchId,
+        txHash: result.id,
+        playerADeposited: true,
+      });
+      if (response.error) {
+        setError(response.error);
+        setStep('form');
+        return;
+      }
+      setStep('done');
+      router.push(`/matches/${encodeURIComponent(matchId)}`);
+    } catch (err: any) {
+      setError(err.message || 'Transaction failed');
+      setStep('form');
+    }
   };
 
   const getStepMessage = () => {
     switch (step) {
-      case 'signing': return isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...';
+      case 'signing': return 'Confirm with Face ID...';
       case 'confirming': return 'Confirming transaction on-chain...';
-      case 'saving': return hasSession ? 'Creating match...' : 'Saving match...';
+      case 'saving': return 'Saving match...';
       case 'done': return 'Match created! Redirecting...';
       default: return '';
     }
@@ -338,7 +305,7 @@ function CreateMatchContent() {
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-3 sm:px-4 py-3 rounded text-xs sm:text-sm">
                 <p className="font-semibold">{getStepMessage()}</p>
                 {step === 'signing' && (
-                  <p className="mt-1">Please approve the transaction in your wallet to create the match on-chain.</p>
+                  <p className="mt-1">Please confirm with Face ID / Touch ID to create the match on-chain.</p>
                 )}
               </div>
             )}

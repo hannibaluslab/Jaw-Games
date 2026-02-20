@@ -2,17 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import { useAccount, useDisconnect, useReadContract, useSendCalls } from 'wagmi';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
+import { publicClient } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
-import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { getTokenSymbol, ENS_DOMAIN, USDC_ADDRESS, TOKENS, ERC20_ABI } from '@/lib/contracts';
 
 function DashboardContent() {
   const router = useRouter();
   const api = useApi();
-  const { isConnected, address, status } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { isConnected, address, isLoading, account, signOut } = useJawAccount();
 
   const [username, setUsername] = useState<string | null>(null);
   const [inviteCount, setInviteCount] = useState(0);
@@ -23,6 +22,8 @@ function DashboardContent() {
   const [sendAmount, setSendAmount] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [usdcBalance, setUsdcBalance] = useState<bigint | undefined>(undefined);
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   const copyAddress = (addr: string) => {
@@ -31,23 +32,26 @@ function DashboardContent() {
     setTimeout(() => setCopiedAddress(null), 1500);
   };
 
-  const { hasSession, isGranting, grantSession, checkSession, revokeSession, error: sessionError } = useSessionPermission();
-
   // Read USDC balance
-  const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
-
-  // Send USDC via JAW (EIP-5792)
-  const { sendCalls, isPending: isSending } = useSendCalls();
+  const fetchBalance = async () => {
+    if (!address) return;
+    try {
+      const balance = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      });
+      setUsdcBalance(balance as bigint);
+    } catch {}
+  };
 
   useEffect(() => {
-    // Wait for wagmi to finish reconnecting before deciding to redirect
-    if (status === 'connecting' || status === 'reconnecting') return;
+    if (address) fetchBalance();
+  }, [address]);
+
+  useEffect(() => {
+    if (isLoading) return;
     if (!isConnected || !address) {
       router.push('/');
       return;
@@ -98,15 +102,13 @@ function DashboardContent() {
         );
       }
       setMatchesLoading(false);
-
-      // Check for active session
-      checkSession();
     };
 
     init();
-  }, [api, router, isConnected, address, status]);
+  }, [api, router, isConnected, address, isLoading]);
 
-  const handleSendUSDC = (recipientAddress: string) => {
+  const handleSendUSDC = async (recipientAddress: string) => {
+    if (!account) return;
     setSendError(null);
     const amount = parseFloat(sendAmount);
     if (!amount || amount <= 0) {
@@ -114,31 +116,28 @@ function DashboardContent() {
       return;
     }
     const amountInUnits = parseUnits(sendAmount, TOKENS.USDC.decimals);
-    sendCalls({
-      calls: [{
+    setIsSending(true);
+    try {
+      await account.sendCalls([{
         to: USDC_ADDRESS,
         data: encodeFunctionData({
           abi: ERC20_ABI,
           functionName: 'transfer',
           args: [recipientAddress as `0x${string}`, amountInUnits],
         }),
-      }],
-    }, {
-      onSuccess: () => {
-        setSendingTo(null);
-        setSendAmount('');
-        refetchBalance();
-      },
-      onError: (err) => {
-        setSendError(err.message || 'Transfer failed');
-      },
-    });
+      }]);
+      setSendingTo(null);
+      setSendAmount('');
+      fetchBalance();
+    } catch (err: any) {
+      setSendError(err.message || 'Transfer failed');
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const handleSignOut = async () => {
-    await revokeSession();
-    localStorage.clear();
-    disconnect();
+  const handleSignOut = () => {
+    signOut();
     router.push('/');
   };
 
@@ -177,7 +176,7 @@ function DashboardContent() {
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <div className="text-right">
               <p className="text-sm sm:text-lg font-bold text-gray-900">
-                {usdcBalance !== undefined ? Number(formatUnits(usdcBalance as bigint, TOKENS.USDC.decimals)).toFixed(2) : '...'} USDC
+                {usdcBalance !== undefined ? Number(formatUnits(usdcBalance, TOKENS.USDC.decimals)).toFixed(2) : '...'} USDC
               </p>
             </div>
             <button onClick={handleSignOut} className="text-xs sm:text-sm text-gray-600 hover:text-gray-900">
@@ -188,37 +187,6 @@ function DashboardContent() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 sm:py-12">
-        {/* Session Permission Banner */}
-        {!hasSession ? (
-          <div className="mb-4 sm:mb-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-yellow-800 text-sm">Enable popup-free gameplay</p>
-              <p className="text-yellow-700 text-xs mt-1">Grant a 1-hour game session to play without wallet popups.</p>
-              {sessionError && <p className="text-red-600 text-xs mt-1">{sessionError}</p>}
-            </div>
-            <button
-              onClick={grantSession}
-              disabled={isGranting}
-              className="bg-yellow-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-yellow-700 transition disabled:opacity-50 whitespace-nowrap"
-            >
-              {isGranting ? 'Granting...' : 'Grant Session'}
-            </button>
-          </div>
-        ) : (
-          <div className="mb-4 sm:mb-6 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <p className="text-green-800 text-sm font-medium">Session active — no wallet popups needed</p>
-            </div>
-            <button
-              onClick={async () => { await revokeSession(); }}
-              className="text-green-700 text-xs underline hover:text-green-900"
-            >
-              Revoke
-            </button>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           {/* Games Card */}
           <button

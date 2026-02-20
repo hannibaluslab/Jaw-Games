@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { useAccount } from 'wagmi';
 import { keccak256, toHex, parseUnits } from 'viem';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
 import { useApi } from '@/lib/hooks/useApi';
 import {
   TOKENS,
@@ -21,7 +21,7 @@ function toLocalDatetimeStr(date: Date): string {
 function CreateBetContent() {
   const router = useRouter();
   const api = useApi();
-  const { address, isConnected, status } = useAccount();
+  const { address, isConnected, isLoading } = useJawAccount();
 
   const [step, setStep] = useState<Step>('statement');
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ function CreateBetContent() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (status === 'connecting' || status === 'reconnecting') return;
+    if (isLoading) return;
     if (!isConnected) {
       router.push('/');
       return;
@@ -57,7 +57,7 @@ function CreateBetContent() {
         setPlayers(res.data.players);
       }
     });
-  }, [isConnected, status, router, api]);
+  }, [isConnected, isLoading, router, api]);
 
   const myUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
 

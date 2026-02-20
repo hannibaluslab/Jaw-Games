@@ -2,10 +2,9 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useSendCalls } from 'wagmi';
 import { formatUnits, encodeFunctionData } from 'viem';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
 import { useApi } from '@/lib/hooks/useApi';
-import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL } from '@/lib/contracts';
 
 type Action = 'idle' | 'accepting' | 'depositing' | 'cancelling';
@@ -15,16 +14,13 @@ export default function MatchDetailsPage() {
   const params = useParams();
   const matchId = params.id as string;
   const api = useApi();
-  const { address } = useAccount();
-  const { hasSession, checkSession } = useSessionPermission();
+  const { address, account } = useJawAccount();
 
   const [match, setMatch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<Action>('idle');
-
-  const { sendCalls, isPending: isTxPending } = useSendCalls();
-
+  const [isTxPending, setIsTxPending] = useState(false);
 
   const currentUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
   const fetchMatch = useCallback(async () => {
@@ -40,40 +36,23 @@ export default function MatchDetailsPage() {
 
   useEffect(() => {
     fetchMatch();
-    checkSession();
     const interval = setInterval(fetchMatch, 5000);
     return () => clearInterval(interval);
-  }, [fetchMatch, checkSession]);
+  }, [fetchMatch]);
 
   const isPlayerA = match && currentUsername === match.player_a_username;
   const isPlayerB = match && currentUsername === match.player_b_username;
   const myDeposited = isPlayerA ? match?.player_a_deposited : match?.player_b_deposited;
 
-  // Accept + deposit via session API (no popup) or wallet popup
-  const handleAcceptAndDeposit = () => {
+  // Accept + approve + deposit
+  const handleAcceptAndDeposit = async () => {
+    if (!account) return;
     setAction('accepting');
     setError(null);
+    setIsTxPending(true);
 
-    // Session path: no wallet popup
-    if (hasSession) {
-      api.acceptMatchViaSession(matchId).then((response) => {
-        if (response.error) {
-          setError(response.error);
-          setAction('idle');
-        } else {
-          setAction('idle');
-          router.push(`/matches/${encodeURIComponent(matchId)}/play`);
-        }
-      }).catch((err: any) => {
-        setError(err.message || 'Session accept failed');
-        setAction('idle');
-      });
-      return;
-    }
-
-    // Wallet popup path: sendCalls must be synchronous from click
-    sendCalls({
-      calls: [
+    try {
+      const result = await account.sendCalls([
         {
           to: ESCROW_CONTRACT_ADDRESS,
           data: encodeFunctionData({
@@ -98,27 +77,28 @@ export default function MatchDetailsPage() {
             args: [matchId as `0x${string}`],
           }),
         },
-      ],
-    }, {
-      onSuccess: async (result) => {
-        await api.confirmMatchAccepted(matchId, result.id);
-        await api.confirmDeposit(matchId, address!, result.id);
-        setAction('idle');
-        router.push(`/matches/${encodeURIComponent(matchId)}/play`);
-      },
-      onError: (err) => {
-        setError(err.message || 'Transaction failed');
-        setAction('idle');
-      },
-    });
+      ]);
+      await api.confirmMatchAccepted(matchId, result.id);
+      await api.confirmDeposit(matchId, address!, result.id);
+      setAction('idle');
+      router.push(`/matches/${encodeURIComponent(matchId)}/play`);
+    } catch (err: any) {
+      setError(err.message || 'Transaction failed');
+      setAction('idle');
+    } finally {
+      setIsTxPending(false);
+    }
   };
 
   // Batch approve + deposit for player A (when they need to deposit separately)
-  const handleApproveAndDeposit = () => {
+  const handleApproveAndDeposit = async () => {
+    if (!account) return;
     setAction('depositing');
     setError(null);
-    sendCalls({
-      calls: [
+    setIsTxPending(true);
+
+    try {
+      const result = await account.sendCalls([
         {
           to: match.token_address as `0x${string}`,
           data: encodeFunctionData({
@@ -135,30 +115,28 @@ export default function MatchDetailsPage() {
             args: [matchId as `0x${string}`],
           }),
         },
-      ],
-    }, {
-      onSuccess: (result) => {
-        api.confirmDeposit(matchId, address!, result.id).then(() => {
-          setAction('idle');
-          fetchMatch();
-        });
-      },
-      onError: (err) => {
-        setError(err.message || 'Transaction failed');
-        setAction('idle');
-      },
-    });
+      ]);
+      await api.confirmDeposit(matchId, address!, result.id);
+      setAction('idle');
+      fetchMatch();
+    } catch (err: any) {
+      setError(err.message || 'Transaction failed');
+      setAction('idle');
+    } finally {
+      setIsTxPending(false);
+    }
   };
 
   // Cancel match — if deposited, do on-chain cancel (instant refund) + DB update; otherwise DB only
-  const handleCancelMatch = () => {
+  const handleCancelMatch = async () => {
     setAction('cancelling');
     setError(null);
 
     if (myDeposited) {
-      // On-chain cancel (refunds deposit immediately), then update DB
-      sendCalls({
-        calls: [
+      if (!account) return;
+      setIsTxPending(true);
+      try {
+        await account.sendCalls([
           {
             to: ESCROW_CONTRACT_ADDRESS,
             data: encodeFunctionData({
@@ -167,31 +145,29 @@ export default function MatchDetailsPage() {
               args: [matchId as `0x${string}`],
             }),
           },
-        ],
-      }, {
-        onSuccess: async () => {
-          await api.cancelMatch(matchId);
-          setAction('idle');
-          fetchMatch();
-        },
-        onError: (err) => {
-          setError(err.message || 'Cancel failed');
-          setAction('idle');
-        },
-      });
+        ]);
+        await api.cancelMatch(matchId);
+        setAction('idle');
+        fetchMatch();
+      } catch (err: any) {
+        setError(err.message || 'Cancel failed');
+        setAction('idle');
+      } finally {
+        setIsTxPending(false);
+      }
     } else {
       // No on-chain deposit — just update DB
-      api.cancelMatch(matchId).then((response) => {
+      try {
+        const response = await api.cancelMatch(matchId);
         if (response.error) {
           setError(response.error);
         } else {
           fetchMatch();
         }
-        setAction('idle');
-      }).catch((err: any) => {
+      } catch (err: any) {
         setError(err.message || 'Failed to cancel match');
-        setAction('idle');
-      });
+      }
+      setAction('idle');
     }
   };
 
@@ -331,7 +307,7 @@ export default function MatchDetailsPage() {
             className="w-full bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 text-base sm:text-lg"
           >
             {action === 'accepting'
-              ? (hasSession ? 'Accepting match...' : 'Confirm in wallet...')
+              ? 'Confirm with Face ID...'
               : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
         )}
@@ -367,7 +343,7 @@ export default function MatchDetailsPage() {
             disabled={isProcessing}
             className="w-full bg-green-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50 text-base sm:text-lg mt-4"
           >
-            {action === 'depositing' ? 'Confirm in wallet...' : `Approve & Deposit ${stakeDisplay} ${tokenSymbol}`}
+            {action === 'depositing' ? 'Confirm with Face ID...' : `Approve & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
         )}
 
@@ -401,9 +377,9 @@ export default function MatchDetailsPage() {
           </div>
         )}
 
-        {isProcessing && !hasSession && (
+        {isProcessing && (
           <div className="mt-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded text-sm">
-            Please confirm the transaction in your wallet.
+            Please confirm with Face ID / Touch ID.
           </div>
         )}
       </main>

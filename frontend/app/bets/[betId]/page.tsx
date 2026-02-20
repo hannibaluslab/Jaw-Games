@@ -2,8 +2,9 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useAccount, useSendCalls, usePublicClient } from 'wagmi';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
+import { publicClient } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
 import {
   BET_SETTLER_CONTRACT_ADDRESS,
@@ -21,7 +22,7 @@ export default function BetDetailPage() {
   const params = useParams();
   const betId = decodeURIComponent(params.betId as string);
   const api = useApi();
-  const { address, isConnected, status } = useAccount();
+  const { address, isConnected, isLoading, account } = useJawAccount();
 
   const [bet, setBet] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -29,6 +30,7 @@ export default function BetDetailPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isTxPending, setIsTxPending] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<number | null>(null);
   const [betAmount, setBetAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +48,6 @@ export default function BetDetailPage() {
   const [editBettingDeadline, setEditBettingDeadline] = useState('');
   const [editResolveDate, setEditResolveDate] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
-
-  const { sendCalls, isPending: isTxPending } = useSendCalls();
-  const publicClient = usePublicClient();
 
   const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
   const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
@@ -101,7 +100,7 @@ export default function BetDetailPage() {
   };
 
   useEffect(() => {
-    if (status === 'connecting' || status === 'reconnecting') return;
+    if (isLoading) return;
     if (!isConnected) {
       router.push('/');
       return;
@@ -109,7 +108,7 @@ export default function BetDetailPage() {
     if (userId) {
       api.setAuthToken(userId);
     }
-  }, [isConnected, status, router, api, userId]);
+  }, [isConnected, isLoading, router, api, userId]);
 
   const fetchBet = async (initial = false) => {
     const response = await api.getBet(betId);
@@ -199,7 +198,7 @@ export default function BetDetailPage() {
   };
 
   const handlePlaceBet = async (outcomeIdx: number) => {
-    if (!address) return;
+    if (!address || !account) return;
     if (!BET_SETTLER_CONTRACT_ADDRESS) {
       setError('BetSettler contract address not configured. Contact support.');
       return;
@@ -209,7 +208,7 @@ export default function BetDetailPage() {
 
     // Pre-flight: check if user already has an on-chain bet (prevents confusing revert)
     try {
-      const existing = await publicClient!.readContract({
+      const existing = await publicClient.readContract({
         address: BET_SETTLER_CONTRACT_ADDRESS,
         abi: BET_SETTLER_ABI,
         functionName: 'bettors',
@@ -228,134 +227,117 @@ export default function BetDetailPage() {
     const tokenInfo = bet.token_address?.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? TOKENS.USDT : TOKENS.USDC;
     const parsedAmount = parseUnits(betAmount || formatUnits(BigInt(bet.stake_amount), 6), 6);
 
+    setIsTxPending(true);
     try {
-      sendCalls({
-        calls: [
-          {
-            to: tokenInfo.address,
-            data: encodeFunctionData({
-              abi: ERC20_ABI,
-              functionName: 'approve',
-              args: [BET_SETTLER_CONTRACT_ADDRESS, parsedAmount],
-            }),
-          },
-          {
-            to: BET_SETTLER_CONTRACT_ADDRESS,
-            data: encodeFunctionData({
-              abi: BET_SETTLER_ABI,
-              functionName: 'placeBet',
-              args: [betId as `0x${string}`, outcomeIdx, parsedAmount],
-            }),
-          },
-        ],
-      }, {
-        onSuccess: async (result) => {
-          // Poll on-chain to verify the bet was placed
-          // bettors() returns [outcome, amount, claimed] as an array (not struct)
-          let confirmed = false;
-          for (let i = 0; i < 20; i++) {
-            try {
-              const bettorInfo = await publicClient!.readContract({
-                address: BET_SETTLER_CONTRACT_ADDRESS,
-                abi: BET_SETTLER_ABI,
-                functionName: 'bettors',
-                args: [betId as `0x${string}`, address as `0x${string}`],
-              }) as [number, bigint, boolean];
-              const onChainOutcome = Number(bettorInfo[0]);
-              if (onChainOutcome > 0) {
-                confirmed = true;
-                break;
-              }
-            } catch {}
-            await new Promise(r => setTimeout(r, 3000));
-          }
-          if (!confirmed) {
-            setError('Transaction was not confirmed on-chain. Please try again.');
-            setActionLoading(false);
-            return;
-          }
-          try {
-            await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
-          } catch {
-            // On-chain bet succeeded even if backend sync fails
-          }
-          setSelectedOutcome(null);
-          setBetAmount('');
-          setActionLoading(false);
-          fetchBet();
+      const result = await account.sendCalls([
+        {
+          to: tokenInfo.address,
+          data: encodeFunctionData({
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [BET_SETTLER_CONTRACT_ADDRESS, parsedAmount],
+          }),
         },
-        onError: (err) => {
-          setError(err.message || 'Transaction failed');
-          setActionLoading(false);
-        },
-      });
-    } catch (err: any) {
-      setError(err.message || 'Failed to send transaction');
-      setActionLoading(false);
-    }
-  };
-
-  const handleClaimWinnings = () => {
-    if (!address || !BET_SETTLER_CONTRACT_ADDRESS) return;
-    setError(null);
-    setActionLoading(true);
-
-    try {
-      sendCalls({
-        calls: [{
+        {
           to: BET_SETTLER_CONTRACT_ADDRESS,
           data: encodeFunctionData({
             abi: BET_SETTLER_ABI,
-            functionName: 'claimWinnings',
-            args: [betId as `0x${string}`],
+            functionName: 'placeBet',
+            args: [betId as `0x${string}`, outcomeIdx, parsedAmount],
           }),
-        }],
-      }, {
-        onSuccess: async (result) => {
-          await api.claimBetWinnings(betId, result.id);
-          setActionLoading(false);
-          fetchBet();
         },
-        onError: (err) => {
-          setError(err.message || 'Claim failed');
-          setActionLoading(false);
-        },
-      });
-    } catch (err: any) {
-      setError(err.message || 'Failed to send transaction');
+      ]);
+
+      // Poll on-chain to verify the bet was placed
+      let confirmed = false;
+      for (let i = 0; i < 20; i++) {
+        try {
+          const bettorInfo = await publicClient.readContract({
+            address: BET_SETTLER_CONTRACT_ADDRESS,
+            abi: BET_SETTLER_ABI,
+            functionName: 'bettors',
+            args: [betId as `0x${string}`, address as `0x${string}`],
+          }) as [number, bigint, boolean];
+          const onChainOutcome = Number(bettorInfo[0]);
+          if (onChainOutcome > 0) {
+            confirmed = true;
+            break;
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      if (!confirmed) {
+        setError('Transaction was not confirmed on-chain. Please try again.');
+        setActionLoading(false);
+        setIsTxPending(false);
+        return;
+      }
+      try {
+        await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
+      } catch {
+        // On-chain bet succeeded even if backend sync fails
+      }
+      setSelectedOutcome(null);
+      setBetAmount('');
       setActionLoading(false);
+      fetchBet();
+    } catch (err: any) {
+      setError(err.message || 'Transaction failed');
+      setActionLoading(false);
+    } finally {
+      setIsTxPending(false);
     }
   };
 
-  const handleClaimRefund = () => {
-    if (!address || !BET_SETTLER_CONTRACT_ADDRESS) return;
+  const handleClaimWinnings = async () => {
+    if (!address || !account || !BET_SETTLER_CONTRACT_ADDRESS) return;
     setError(null);
     setActionLoading(true);
+    setIsTxPending(true);
 
     try {
-      sendCalls({
-        calls: [{
-          to: BET_SETTLER_CONTRACT_ADDRESS,
-          data: encodeFunctionData({
-            abi: BET_SETTLER_ABI,
-            functionName: 'claimRefund',
-            args: [betId as `0x${string}`],
-          }),
-        }],
-      }, {
-        onSuccess: async (result) => {
-          await api.claimBetWinnings(betId, result.id);
-          setActionLoading(false);
-          fetchBet();
-        },
-        onError: (err) => {
-          setError(err.message || 'Refund failed');
-          setActionLoading(false);
-        },
-      });
-    } catch (err: any) {
-      setError(err.message || 'Failed to send transaction');
+      const result = await account.sendCalls([{
+        to: BET_SETTLER_CONTRACT_ADDRESS,
+        data: encodeFunctionData({
+          abi: BET_SETTLER_ABI,
+          functionName: 'claimWinnings',
+          args: [betId as `0x${string}`],
+        }),
+      }]);
+      await api.claimBetWinnings(betId, result.id);
       setActionLoading(false);
+      fetchBet();
+    } catch (err: any) {
+      setError(err.message || 'Claim failed');
+      setActionLoading(false);
+    } finally {
+      setIsTxPending(false);
+    }
+  };
+
+  const handleClaimRefund = async () => {
+    if (!address || !account || !BET_SETTLER_CONTRACT_ADDRESS) return;
+    setError(null);
+    setActionLoading(true);
+    setIsTxPending(true);
+
+    try {
+      const result = await account.sendCalls([{
+        to: BET_SETTLER_CONTRACT_ADDRESS,
+        data: encodeFunctionData({
+          abi: BET_SETTLER_ABI,
+          functionName: 'claimRefund',
+          args: [betId as `0x${string}`],
+        }),
+      }]);
+      await api.claimBetWinnings(betId, result.id);
+      setActionLoading(false);
+      fetchBet();
+    } catch (err: any) {
+      setError(err.message || 'Refund failed');
+      setActionLoading(false);
+    } finally {
+      setIsTxPending(false);
     }
   };
 
