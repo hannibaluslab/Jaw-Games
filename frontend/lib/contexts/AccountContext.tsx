@@ -59,7 +59,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       console.error('Sign in error:', err);
       const msg = err.message || 'Sign in failed';
-      setError(msg);
+      if (msg.includes('not allowed') || msg.includes('denied permission') || msg.includes('credential') || msg.includes('AbortError')) {
+        setError('Sign in was cancelled or failed. Please try again.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsPending(false);
     }

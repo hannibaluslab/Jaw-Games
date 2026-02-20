@@ -23,16 +23,27 @@ export default function Home() {
     if (!isConnected || !address) return;
 
     if (pendingRegistration.current) {
-      // New sign-up: register with JAW Games backend before redirecting
+      // New sign-up: register with JAW Games backend before redirecting.
+      // ENS subdomain may take a few seconds to propagate after Account.create(),
+      // so retry registration with delays to wait for ENS resolution.
       const uname = pendingRegistration.current;
       pendingRegistration.current = null;
-      api.registerUser({
-        username: uname,
-        ensName: `${uname}.${ENS_DOMAIN}`,
-        smartAccountAddress: address,
-      }).then(() => {
-        router.push('/dashboard');
-      }).catch(() => {
+
+      const registerWithRetry = async (retries: number, delayMs: number) => {
+        for (let i = 0; i < retries; i++) {
+          const result = await api.registerUser({
+            username: uname,
+            ensName: `${uname}.${ENS_DOMAIN}`,
+            smartAccountAddress: address,
+          });
+          if (!result.error) return; // success
+          if (i < retries - 1) {
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
+        }
+      };
+
+      registerWithRetry(5, 3000).finally(() => {
         router.push('/dashboard');
       });
     } else {
