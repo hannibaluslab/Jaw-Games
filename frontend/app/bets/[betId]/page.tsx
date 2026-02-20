@@ -200,10 +200,14 @@ export default function BetDetailPage() {
 
   const handlePlaceBet = (outcomeIdx: number) => {
     if (!address) return;
+    if (!BET_SETTLER_CONTRACT_ADDRESS) {
+      setError('BetSettler contract address not configured. Contact support.');
+      return;
+    }
     setError(null);
     setActionLoading(true);
 
-    const tokenInfo = bet.token_address.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? TOKENS.USDT : TOKENS.USDC;
+    const tokenInfo = bet.token_address?.toLowerCase() === TOKENS.USDT.address.toLowerCase() ? TOKENS.USDT : TOKENS.USDC;
     const parsedAmount = parseUnits(betAmount || formatUnits(BigInt(bet.stake_amount), 6), 6);
 
     try {
@@ -268,7 +272,7 @@ export default function BetDetailPage() {
   };
 
   const handleClaimWinnings = () => {
-    if (!address) return;
+    if (!address || !BET_SETTLER_CONTRACT_ADDRESS) return;
     setError(null);
     setActionLoading(true);
 
@@ -300,7 +304,7 @@ export default function BetDetailPage() {
   };
 
   const handleClaimRefund = () => {
-    if (!address) return;
+    if (!address || !BET_SETTLER_CONTRACT_ADDRESS) return;
     setError(null);
     setActionLoading(true);
 
