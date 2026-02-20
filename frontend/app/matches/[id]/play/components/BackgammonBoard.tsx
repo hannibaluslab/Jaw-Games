@@ -23,6 +23,15 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   const [localState, setLocalState] = useState<BackgammonGameState>(gameState);
   const [isLandscape, setIsLandscape] = useState(true);
 
+  // Defensive: ensure nested objects exist
+  if (!gameState?.board || !gameState?.bar || !gameState?.borneOff) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
+        <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
   const myPlayerKey = gameState.player1 === userId ? 'player1' : 'player2';
   const opponentKey = myPlayerKey === 'player1' ? 'player2' : 'player1';
   const isMyTurn = gameState.currentTurn === myPlayerKey && !gameState.winner;
@@ -221,8 +230,8 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
 
   // Render bar
   const renderBar = () => {
-    const myBar = localState.bar[myPlayerKey];
-    const oppBar = localState.bar[opponentKey];
+    const myBar = localState.bar?.[myPlayerKey] ?? 0;
+    const oppBar = localState.bar?.[opponentKey] ?? 0;
     const isBarSelected = selectedFrom === 'bar';
     const canSelectBar = isMyTurn && gameState.phase === 'moving' && myBar > 0 && validMoves.some(m => m.from === 'bar');
 
@@ -296,7 +305,7 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
 
   // Render borne off area
   const renderBorneOff = (playerKey: 'player1' | 'player2') => {
-    const count = localState.borneOff[playerKey];
+    const count = localState.borneOff?.[playerKey] ?? 0;
     const color = playerKey === 'player1' ? P1_COLOR : P2_COLOR;
     const isValidDest = destinations.includes('off') && playerKey === myPlayerKey;
 
@@ -339,11 +348,10 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
 
   // Render dice
   const renderDice = () => {
-    if (gameState.dice.length === 0) return null;
-    const remaining = new Set(localState.remainingDice);
+    if (!gameState.dice || gameState.dice.length === 0) return null;
 
     // Track which remaining dice we've accounted for
-    const remainingCopy = [...localState.remainingDice];
+    const remainingCopy = [...(localState.remainingDice || [])];
 
     return (
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

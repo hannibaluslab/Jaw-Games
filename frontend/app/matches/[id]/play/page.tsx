@@ -3,11 +3,20 @@
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { formatUnits } from 'viem';
+import dynamic from 'next/dynamic';
 import { useGameWebSocket } from '@/lib/hooks/useGameWebSocket';
 import { useApi } from '@/lib/hooks/useApi';
 import { BLOCK_EXPLORER_URL, PLATFORM_FEE, WINNER_SHARE, getTokenSymbol } from '@/lib/contracts';
 import TicTacToeBoard from './components/TicTacToeBoard';
-import BackgammonBoard from './components/BackgammonBoard';
+
+const BackgammonBoard = dynamic(() => import('./components/BackgammonBoard'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
+      <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full" />
+    </div>
+  ),
+});
 
 export default function PlayGamePage() {
   const router = useRouter();
