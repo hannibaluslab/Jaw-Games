@@ -64,29 +64,26 @@ export function useSessionPermission() {
       }
       const spenderAddress = spenderRes.data.spenderAddress;
 
-      // 2. Grant ERC-7715 permission via core provider
+      // 2. Grant ERC-7715 permission via Account.grantPermissions()
       const expirySeconds = Math.floor(Date.now() / 1000) + 3600; // 1 hour
 
-      const result = await (account as any).provider.request({
-        method: 'wallet_grantPermissions',
-        params: [{
-          expiry: expirySeconds,
-          spender: spenderAddress,
-          permissions: {
-            calls: [
-              { target: USDC_ADDRESS, functionSignature: 'approve(address,uint256)' },
-              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'placeBet(bytes32,uint8,uint256)' },
-              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'claimWinnings(bytes32)' },
-              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'claimRefund(bytes32)' },
-            ],
-            spends: [{
-              token: USDC_ADDRESS,
-              allowance: parseUnits(spendLimit, 6).toString(),
-              unit: 'hour',
-            }],
-          },
-        }],
-      });
+      const result = await account.grantPermissions(
+        expirySeconds,
+        spenderAddress as `0x${string}`,
+        {
+          calls: [
+            { target: USDC_ADDRESS, functionSignature: 'approve(address,uint256)' },
+            { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'placeBet(bytes32,uint8,uint256)' },
+            { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'claimWinnings(bytes32)' },
+            { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'claimRefund(bytes32)' },
+          ],
+          spends: [{
+            token: USDC_ADDRESS,
+            allowance: parseUnits(spendLimit, 6).toString(),
+            unit: 'hour',
+          }],
+        },
+      );
 
       const permissionId = result.permissionId;
       if (!permissionId) {
