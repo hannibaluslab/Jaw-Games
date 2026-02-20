@@ -68,10 +68,14 @@ class UserController {
         return res.status(400).json({ error: 'Username already taken' });
       }
 
-      // Verify ENS resolution
-      const resolvedAddress = await ENSService.resolveENS(ensName);
-      if (!resolvedAddress || resolvedAddress.toLowerCase() !== smartAccountAddress.toLowerCase()) {
-        return res.status(400).json({ error: 'ENS name does not resolve to provided address' });
+      // Verify address owns a JAW subname via JustaName API
+      // (On-chain ENS resolution on Base Sepolia doesn't work for JustaName subnames)
+      const resolvedEns = await ENSService.reverseResolve(smartAccountAddress);
+      if (resolvedEns) {
+        const match = resolvedEns.match(/^(.+)\.lafung\.eth$/i);
+        if (match && match[1].toLowerCase() !== username.toLowerCase()) {
+          return res.status(400).json({ error: 'Username does not match your JAW account' });
+        }
       }
 
       // Create user

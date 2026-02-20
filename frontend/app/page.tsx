@@ -24,26 +24,23 @@ export default function Home() {
 
     if (pendingRegistration.current) {
       // New sign-up: register with JAW Games backend before redirecting.
-      // ENS subdomain may take a few seconds to propagate after Account.create(),
-      // so retry registration with delays to wait for ENS resolution.
+      // Retry a couple times in case JustaName API hasn't indexed the subname yet.
       const uname = pendingRegistration.current;
       pendingRegistration.current = null;
 
-      const registerWithRetry = async (retries: number, delayMs: number) => {
-        for (let i = 0; i < retries; i++) {
+      const registerWithRetry = async () => {
+        for (let i = 0; i < 3; i++) {
           const result = await api.registerUser({
             username: uname,
             ensName: `${uname}.${ENS_DOMAIN}`,
             smartAccountAddress: address,
           });
-          if (!result.error) return; // success
-          if (i < retries - 1) {
-            await new Promise((r) => setTimeout(r, delayMs));
-          }
+          if (!result.error) return;
+          if (i < 2) await new Promise((r) => setTimeout(r, 2000));
         }
       };
 
-      registerWithRetry(5, 3000).finally(() => {
+      registerWithRetry().finally(() => {
         router.push('/dashboard');
       });
     } else {
