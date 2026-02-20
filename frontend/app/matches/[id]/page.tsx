@@ -2,7 +2,7 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useSendCalls, usePublicClient } from 'wagmi';
+import { useAccount, useSendCalls } from 'wagmi';
 import { formatUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
@@ -24,11 +24,9 @@ export default function MatchDetailsPage() {
   const [action, setAction] = useState<Action>('idle');
 
   const { sendCalls, isPending: isTxPending } = useSendCalls();
-  const publicClient = usePublicClient();
+
 
   const currentUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
-  const [onChainVerified, setOnChainVerified] = useState<boolean | null>(true);
-
   const fetchMatch = useCallback(async () => {
     const response = await api.getMatch(matchId);
     if (response.data) {
@@ -46,30 +44,6 @@ export default function MatchDetailsPage() {
     const interval = setInterval(fetchMatch, 5000);
     return () => clearInterval(interval);
   }, [fetchMatch, checkSession]);
-
-  // Verify match exists on-chain before allowing interactions
-  // matches() returns [gameId, playerA, playerB, ...] as an array (not struct)
-  useEffect(() => {
-    if (!match || !publicClient || match.status !== 'created') return;
-    if (!ESCROW_CONTRACT_ADDRESS) {
-      console.warn('ESCROW_CONTRACT_ADDRESS not set, skipping on-chain check');
-      setOnChainVerified(true);
-      return;
-    }
-    publicClient.readContract({
-      address: ESCROW_CONTRACT_ADDRESS,
-      abi: ESCROW_ABI,
-      functionName: 'matches',
-      args: [matchId as `0x${string}`],
-    }).then((result: any) => {
-      const playerA = Array.isArray(result) ? result[1] : result.playerA;
-      setOnChainVerified(playerA !== '0x0000000000000000000000000000000000000000');
-    }).catch((err) => {
-      console.error('On-chain match verification failed, allowing interaction:', err);
-      // Don't block user on RPC failures — only block if we confirmed match doesn't exist
-      setOnChainVerified(true);
-    });
-  }, [match, publicClient, matchId]);
 
   const isPlayerA = match && currentUsername === match.player_a_username;
   const isPlayerB = match && currentUsername === match.player_b_username;
@@ -348,26 +322,17 @@ export default function MatchDetailsPage() {
           </div>
         )}
 
-        {/* On-chain warning */}
-        {match.status === 'created' && onChainVerified === false && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded mb-4 text-sm">
-            This match is still being confirmed on-chain. Please wait a moment and refresh, or ask the creator to recreate it.
-          </div>
-        )}
-
         {/* Action Buttons */}
         {/* Player B: single button to accept + approve + deposit */}
         {match.status === 'created' && isPlayerB && (
           <button
             onClick={handleAcceptAndDeposit}
-            disabled={isProcessing || onChainVerified === false}
+            disabled={isProcessing}
             className="w-full bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 text-base sm:text-lg"
           >
             {action === 'accepting'
               ? (hasSession ? 'Accepting match...' : 'Confirm in wallet...')
-              : onChainVerified === false
-                ? 'Waiting for on-chain confirmation...'
-                : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
+              : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
         )}
 
