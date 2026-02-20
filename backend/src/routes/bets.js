@@ -40,4 +40,9 @@ router.post('/:betId/cancel', authMiddleware, BetController.cancelBet);
 // Claim winnings (requires auth)
 router.post('/:betId/claim', authMiddleware, BetController.claimWinnings);
 
+// Session-based bet endpoints (no wallet popup)
+router.post('/:betId/session/place', authMiddleware, BetController.placeBetViaSession);
+router.post('/:betId/session/claim', authMiddleware, BetController.claimWinningsViaSession);
+router.post('/:betId/session/refund', authMiddleware, BetController.claimRefundViaSession);
+
 module.exports = router;

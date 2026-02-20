@@ -239,6 +239,19 @@ export class ApiClient {
   async claimBetWinnings(betId: string, txHash?: string): Promise<ApiResponse<{ message: string }>> {
     return this.post(`/api/bets/${betId}/claim`, { txHash });
   }
+
+  // Session-based bet endpoints (no wallet popup)
+  async placeBetViaSession(betId: string, data: { outcome: number; amount: string }): Promise<ApiResponse<{ message: string; txBatchId: string }>> {
+    return this.post(`/api/bets/${betId}/session/place`, data);
+  }
+
+  async claimWinningsViaSession(betId: string): Promise<ApiResponse<{ message: string; txBatchId: string }>> {
+    return this.post(`/api/bets/${betId}/session/claim`);
+  }
+
+  async claimRefundViaSession(betId: string): Promise<ApiResponse<{ message: string; txBatchId: string }>> {
+    return this.post(`/api/bets/${betId}/session/refund`);
+  }
 }
 
 export const apiClient = new ApiClient();
