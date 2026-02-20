@@ -54,14 +54,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     setIsPending(true);
     setError(null);
     try {
-      // Get stored accounts to find a credentialId for WebAuthn sign-in
-      const storedAccounts = Account.getStoredAccounts(JAW_API_KEY);
-      if (storedAccounts.length === 0) {
-        setError('No account found. Please sign up first.');
-        return;
-      }
-      // Pass credentialId to trigger the biometric prompt
-      const acct = await Account.get(accountConfig, storedAccounts[0].credentialId);
+      // Use Account.import() to trigger the OS passkey picker.
+      // This shows all JAW passkeys for this domain and lets the user choose.
+      const acct = await Account.import(accountConfig);
       setAccount(acct);
     } catch (err: any) {
       console.error('Sign in error:', err);
