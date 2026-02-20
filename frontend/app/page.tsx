@@ -216,10 +216,10 @@ export default function Home() {
             <div className="mt-6 space-y-3 shrink-0">
               <button
                 onClick={handleCreateAccount}
-                disabled={isPending}
+                disabled={isPending || isConnected}
                 className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                {isPending ? (
+                {isPending || isConnected ? (
                   <span className="flex items-center">
                     <svg
                       className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
