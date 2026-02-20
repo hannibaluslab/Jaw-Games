@@ -37,12 +37,18 @@ const responsiveCSS = `
 .jaw-main { max-width: 100%; margin: 0 auto; }
 .jaw-actions { display: flex; flex-direction: column; gap: 12px; }
 .jaw-players-grid { display: flex; flex-direction: column; gap: 8px; }
+.jaw-session-inner { display: flex; flex-direction: column; }
+.jaw-session-text { margin-bottom: 12px; }
+.jaw-session-controls { display: flex; gap: 10px; align-items: center; }
 
 @media (min-width: 640px) {
   .jaw-main { max-width: 1024px; }
   .jaw-actions { flex-direction: row; gap: 16px; }
   .jaw-actions > button { flex: 1; }
   .jaw-players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .jaw-session-inner { flex-direction: row; align-items: center; justify-content: space-between; }
+  .jaw-session-text { margin-bottom: 0; }
+  .jaw-session-controls { flex-shrink: 0; }
 }
 `;
 
@@ -349,14 +355,71 @@ function DashboardContent() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 18, color: C.pacYellow, textShadow: '0 0 14px rgba(255,215,0,0.35)' }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.pacYellow, textShadow: '0 0 14px rgba(255,215,0,0.35)' }}>
                 {usdcBalance !== undefined ? Number(formatUnits(usdcBalance, TOKENS.USDC.decimals)).toFixed(2) : '...'}
               </div>
-              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,215,0,0.6)', marginTop: 3 }}>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700, color: 'rgba(255,215,0,0.7)', marginTop: 3 }}>
                 USDC
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ===== QUICK BET MODE ===== */}
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
+        <div style={{ background: 'rgba(0,0,30,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '14px 18px' }}>
+          {hasSession && sessionExpiresAt ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <PowerPellet size={8} />
+                <span style={{ fontSize: 9, color: '#00FF88' }}>
+                  Session active &mdash; {getSessionTimeLeft()}
+                </span>
+              </div>
+              <button
+                onClick={revokeSession}
+                disabled={isRevoking}
+                style={{ fontFamily: 'inherit', fontSize: 7, background: 'rgba(255,68,68,0.15)', color: C.ghostRed, border: '1px solid rgba(255,68,68,0.3)', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', transition: 'all 0.15s', opacity: isRevoking ? 0.5 : 1 }}
+              >
+                {isRevoking ? 'REVOKING...' : 'REVOKE'}
+              </button>
+            </div>
+          ) : (
+            <div className="jaw-session-inner">
+              <div className="jaw-session-text">
+                <div style={{ fontSize: 10, color: C.pacYellow, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PowerPellet size={8} />
+                  QUICK BET MODE
+                </div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                  Play without Face ID each time
+                </div>
+              </div>
+              <div className="jaw-session-controls">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,30,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 12px', flex: '0 0 auto' }}>
+                  <input
+                    value={spendLimit}
+                    onChange={(e) => setSpendLimit(e.target.value)}
+                    style={{ width: 45, background: 'transparent', border: 'none', outline: 'none', fontFamily: "'Press Start 2P', monospace", fontSize: 11, color: C.dotWhite, textAlign: 'center' }}
+                  />
+                  <span style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
+                    USDC/hr
+                  </span>
+                </div>
+                <button
+                  onClick={() => grantSession(spendLimit)}
+                  disabled={isGranting || !spendLimit || Number(spendLimit) <= 0}
+                  style={{ padding: '12px 14px', fontFamily: "'Press Start 2P', monospace", fontSize: 8, background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 3px 0 #B8960A', transition: 'all 0.15s', opacity: (isGranting || !spendLimit || Number(spendLimit) <= 0) ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                >
+                  {isGranting ? 'Granting...' : 'Enable Session (1h)'}
+                </button>
+              </div>
+              {sessionError && (
+                <div style={{ fontSize: 8, color: C.ghostRed, marginTop: 8 }}>{sessionError}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -374,7 +437,7 @@ function DashboardContent() {
             <div>
               <div style={{ fontSize: 14, color: '#1a3a8a', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Play</div>
               <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(26,58,138,0.8)' }}>
-                Challenge someone to Tic-Tac-Toe
+                Challenge someone to a game
               </div>
             </div>
           </button>
@@ -415,61 +478,6 @@ function DashboardContent() {
               </div>
             )}
           </button>
-        </div>
-      </div>
-
-      {/* ===== QUICK BET MODE ===== */}
-      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
-        <div style={{ background: 'rgba(0,0,30,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '14px 18px' }}>
-          {hasSession && sessionExpiresAt ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <PowerPellet size={8} />
-                <span style={{ fontSize: 9, color: '#00FF88' }}>
-                  Session active &mdash; {getSessionTimeLeft()}
-                </span>
-              </div>
-              <button
-                onClick={revokeSession}
-                disabled={isRevoking}
-                style={{ fontFamily: 'inherit', fontSize: 7, background: 'rgba(255,68,68,0.15)', color: C.ghostRed, border: '1px solid rgba(255,68,68,0.3)', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', transition: 'all 0.15s', opacity: isRevoking ? 0.5 : 1 }}
-              >
-                {isRevoking ? 'REVOKING...' : 'REVOKE'}
-              </button>
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize: 10, color: C.pacYellow, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <PowerPellet size={8} />
-                QUICK BET MODE
-              </div>
-              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4, marginBottom: 12 }}>
-                Play without Face ID each time
-              </div>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,30,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 12px', flex: '0 0 auto' }}>
-                  <input
-                    value={spendLimit}
-                    onChange={(e) => setSpendLimit(e.target.value)}
-                    style={{ width: 45, background: 'transparent', border: 'none', outline: 'none', fontFamily: "'Press Start 2P', monospace", fontSize: 11, color: C.dotWhite, textAlign: 'center' }}
-                  />
-                  <span style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
-                    USDC/hr
-                  </span>
-                </div>
-                <button
-                  onClick={() => grantSession(spendLimit)}
-                  disabled={isGranting || !spendLimit || Number(spendLimit) <= 0}
-                  style={{ flex: 1, padding: '12px 14px', fontFamily: "'Press Start 2P', monospace", fontSize: 8, background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 3px 0 #B8960A', transition: 'all 0.15s', opacity: (isGranting || !spendLimit || Number(spendLimit) <= 0) ? 0.5 : 1 }}
-                >
-                  {isGranting ? 'Granting...' : 'Enable Session (1h)'}
-                </button>
-              </div>
-              {sessionError && (
-                <div style={{ fontSize: 8, color: C.ghostRed, marginTop: 8 }}>{sessionError}</div>
-              )}
-            </>
-          )}
         </div>
       </div>
 

@@ -16,6 +16,10 @@ function CreateMatchContent() {
   const api = useApi();
   const { address, isConnected, isLoading, account } = useJawAccount();
 
+  const gameParam = searchParams.get('game') || 'tictactoe';
+  const gameName = gameParam === 'backgammon' ? 'Backgammon' : 'Tic-Tac-Toe';
+  const gameEmoji = gameParam === 'backgammon' ? '🎲' : '#';
+
   const [opponentUsername, setOpponentUsername] = useState('');
   const [opponentAddress, setOpponentAddress] = useState<string | null>(null);
   const [stakeAmount, setStakeAmount] = useState('3');
@@ -62,7 +66,7 @@ function CreateMatchContent() {
     setStep('signing');
 
     const matchId = keccak256(toHex(`match-${crypto.randomUUID()}-${Date.now()}`));
-    const gameIdHash = keccak256(toHex('tictactoe'));
+    const gameIdHash = keccak256(toHex(gameParam));
     const now = Math.floor(Date.now() / 1000);
     const acceptBy = BigInt(now + 86400);
     const depositBy = BigInt(now + 86400 + 3600);
@@ -131,7 +135,7 @@ function CreateMatchContent() {
       }
       setStep('saving');
       const response = await api.createMatch({
-        gameId: 'tictactoe',
+        gameId: gameParam,
         opponentUsername,
         stakeAmount: stakeAmountParsed.toString(),
         token: tokenInfo.address,
@@ -188,9 +192,9 @@ function CreateMatchContent() {
       <main className="max-w-2xl mx-auto px-4 py-6 sm:py-12">
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">
           <div className="flex items-center mb-6 sm:mb-8">
-            <div className="text-4xl sm:text-6xl mr-3 sm:mr-4 shrink-0">#</div>
+            <div className="text-4xl sm:text-6xl mr-3 sm:mr-4 shrink-0">{gameEmoji}</div>
             <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Create Tic-Tac-Toe Match</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Create {gameName} Match</h1>
               <p className="text-gray-600 text-sm">Challenge an opponent to a game</p>
             </div>
           </div>

@@ -7,7 +7,7 @@ const GameSession = require('../models/GameSession');
 const ENSService = require('../services/ensService');
 const SettlementService = require('../services/settlementService');
 const SessionService = require('../services/sessionService');
-const TicTacToe = require('../games/tictactoe');
+const { getGameEngine } = require('../games/index');
 
 class MatchController {
   /**
@@ -151,8 +151,8 @@ class MatchController {
 
       // If both deposited, initialize game session
       if (match.status === 'ready') {
-        // Create game session
-        const gameState = TicTacToe.createGame(
+        const engine = getGameEngine(match.game_id || 'tictactoe');
+        const gameState = engine.createGame(
           match.player_a_id,
           match.player_b_id
         );
@@ -399,7 +399,8 @@ class MatchController {
       // Reload to check if both deposited → ready
       const updatedMatch = await Match.findByMatchId(matchId);
       if (updatedMatch.status === 'ready') {
-        const gameState = TicTacToe.createGame(updatedMatch.player_a_id, updatedMatch.player_b_id);
+        const engine = getGameEngine(updatedMatch.game_id || 'tictactoe');
+        const gameState = engine.createGame(updatedMatch.player_a_id, updatedMatch.player_b_id);
         await GameSession.create(updatedMatch.id, gameState, updatedMatch.player_a_id);
       }
 

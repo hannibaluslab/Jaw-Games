@@ -229,9 +229,9 @@ export default function MatchDetailsPage() {
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8 mb-4 sm:mb-6">
           <div className="flex items-center justify-between mb-4 sm:mb-6 gap-3">
             <div className="flex items-center min-w-0">
-              <div className="text-4xl sm:text-6xl mr-3 sm:mr-4 shrink-0">#</div>
+              <div className="text-4xl sm:text-6xl mr-3 sm:mr-4 shrink-0">{match.game_id === 'backgammon' ? '🎲' : '#'}</div>
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Tic-Tac-Toe</h1>
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{match.game_id === 'backgammon' ? 'Backgammon' : 'Tic-Tac-Toe'}</h1>
                 <p className="text-gray-600 text-xs sm:text-sm truncate">Match: {matchId.slice(0, 10)}...</p>
               </div>
             </div>
