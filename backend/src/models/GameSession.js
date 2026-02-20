@@ -28,6 +28,11 @@ class GameSession {
     return result.rows[0];
   }
 
+  static async deleteByMatchId(matchId) {
+    const query = 'DELETE FROM game_sessions WHERE match_id = $1';
+    await db.query(query, [matchId]);
+  }
+
   static async endGame(sessionId, result) {
     const query = `
       UPDATE game_sessions
