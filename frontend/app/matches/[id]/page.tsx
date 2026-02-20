@@ -404,7 +404,7 @@ export default function MatchDetailsPage() {
           </button>
         )}
 
-        {match.status === 'settled' && match.settlement_tx_hash && (
+        {match.status === 'settled' && (
           <div className="mt-4 bg-white rounded-xl shadow-lg p-4 sm:p-6 text-center">
             <p className="text-base sm:text-lg font-bold text-gray-900 mb-2">Match Settled</p>
             {match.winner_id && (
@@ -412,6 +412,7 @@ export default function MatchDetailsPage() {
                 Winner: {match.winner_username || 'Unknown'}
               </p>
             )}
+            {match.settlement_tx_hash && (
             <a
               href={`${BLOCK_EXPLORER_URL}/tx/${match.settlement_tx_hash}`}
               target="_blank"
@@ -420,6 +421,7 @@ export default function MatchDetailsPage() {
             >
               View settlement on BaseScan
             </a>
+            )}
           </div>
         )}
 
