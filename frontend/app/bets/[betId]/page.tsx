@@ -380,7 +380,9 @@ export default function BetDetailPage() {
   };
 
   // Determine which actions to show
-  const canBet = bet.status === 'open' && !myParticipation && new Date(bet.betting_deadline) > new Date();
+  const alreadyBet = myParticipation?.role === 'bettor';
+  const isJudge = myParticipation?.role === 'judge';
+  const canBet = bet.status === 'open' && !alreadyBet && !isJudge && new Date(bet.betting_deadline) > new Date();
   const isJudgePending = myParticipation?.role === 'judge' && myParticipation?.invite_status === 'pending' && isDraft;
   const canVote = bet.status === 'judging' && myParticipation?.role === 'judge' && myParticipation?.vote === null;
   const canClaim = bet.status === 'settled' && myParticipation?.role === 'bettor' && myParticipation?.outcome === bet.winning_outcome && !myParticipation?.claimed;
@@ -547,26 +549,42 @@ export default function BetDetailPage() {
 
         {/* Outcomes */}
         <div className="bg-white rounded-xl shadow p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Outcomes</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+            {canBet ? 'Pick your side' : 'Outcomes'}
+          </h2>
+          {canBet && !selectedOutcome && (
+            <p className="text-sm text-gray-500 mb-3">Tap an outcome to place your bet</p>
+          )}
           <div className="space-y-2">
             {outcomes.map((outcome, i) => {
               const outcomeIdx = i + 1;
               const count = getCountForOutcome(outcomeIdx);
               const pct = totalBettors > 0 ? (count / totalBettors) * 100 : 0;
               const isWinner = bet.status === 'settled' && bet.winning_outcome === outcomeIdx;
+              const isSelected = selectedOutcome === outcomeIdx;
 
               return (
-                <div
+                <button
+                  type="button"
                   key={i}
-                  className={`relative rounded-lg border p-3 ${
+                  className={`relative w-full text-left rounded-lg border p-3 transition ${
                     isWinner ? 'border-green-500 bg-green-50' :
-                    selectedOutcome === outcomeIdx ? 'border-teal-500 bg-teal-50' :
+                    isSelected ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-300' :
+                    canBet ? 'border-gray-200 hover:border-teal-400 hover:bg-teal-50/50 active:bg-teal-50' :
                     'border-gray-200'
-                  } ${canBet ? 'cursor-pointer hover:border-teal-300' : ''}`}
+                  }`}
                   onClick={() => canBet && setSelectedOutcome(outcomeIdx)}
+                  disabled={!canBet}
                 >
                   <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-2">
+                      {canBet && (
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? 'border-teal-500 bg-teal-500' : 'border-gray-300'
+                        }`}>
+                          {isSelected && <span className="w-2 h-2 bg-white rounded-full" />}
+                        </span>
+                      )}
                       {isWinner && <span className="text-green-600 font-bold text-xs">WINNER</span>}
                       <span className="font-medium text-gray-900">{outcome}</span>
                     </div>
@@ -577,13 +595,13 @@ export default function BetDetailPage() {
                     className="absolute left-0 top-0 bottom-0 bg-gray-100 rounded-lg"
                     style={{ width: `${pct}%`, opacity: 0.3 }}
                   />
-                </div>
+                </button>
               );
             })}
           </div>
 
-          {/* Place bet action */}
-          {canBet && selectedOutcome && (
+          {/* Place bet action — always visible when canBet */}
+          {canBet && (
             <div className="mt-4 space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Your bet amount</label>
@@ -602,11 +620,13 @@ export default function BetDetailPage() {
                 <p className="text-xs text-gray-400 mt-1">Minimum: {stakeDisplay} {tokenSymbol}</p>
               </div>
               <button
-                onClick={() => handlePlaceBet(selectedOutcome)}
-                disabled={actionLoading || isTxPending || (betAmount !== '' && Number(betAmount) < stakeDisplay)}
+                onClick={() => selectedOutcome && handlePlaceBet(selectedOutcome)}
+                disabled={!selectedOutcome || actionLoading || isTxPending || (betAmount !== '' && Number(betAmount) < stakeDisplay)}
                 className="w-full bg-teal-500 text-white py-3 rounded-lg font-semibold hover:bg-teal-600 transition disabled:opacity-50"
               >
-                {actionLoading || isTxPending ? 'Confirming...' : `Place Bet & Deposit ${betAmount || stakeDisplay} ${tokenSymbol}`}
+                {actionLoading || isTxPending ? 'Confirming...' :
+                  !selectedOutcome ? 'Select an outcome above' :
+                  `Place Bet & Deposit ${betAmount || stakeDisplay} ${tokenSymbol}`}
               </button>
             </div>
           )}
