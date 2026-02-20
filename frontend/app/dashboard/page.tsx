@@ -2,17 +2,120 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import { useAccount, useDisconnect, useReadContract, useSendCalls } from 'wagmi';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
+import { publicClient, JAW_PAYMASTER_URL } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
 import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { getTokenSymbol, ENS_DOMAIN, USDC_ADDRESS, TOKENS, ERC20_ABI } from '@/lib/contracts';
 
+/* ── Pac-Man Theme Constants ── */
+const C = {
+  bg: '#2563EB',
+  pacYellow: '#FFD700',
+  ghostRed: '#FF4444',
+  ghostPink: '#FF8ED4',
+  ghostCyan: '#00E5FF',
+  ghostOrange: '#FFAA33',
+  dotWhite: '#FFFFFF',
+  cardBg: 'rgba(0, 0, 0, 0.18)',
+  cardBorder: 'rgba(255, 255, 255, 0.2)',
+  playYellow: '#FFD700',
+  betOrange: '#FF8C42',
+  invitePink: '#FF6B9D',
+};
+const ghostColors = [C.ghostRed, C.ghostPink, C.ghostCyan, C.ghostOrange];
+
+/* ── Responsive CSS ── */
+const responsiveCSS = `
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+* { box-sizing: border-box; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+
+.jaw-main { max-width: 100%; margin: 0 auto; }
+.jaw-actions { display: flex; flex-direction: column; gap: 12px; }
+.jaw-players-grid { display: flex; flex-direction: column; gap: 8px; }
+.jaw-session-inner { display: flex; flex-direction: column; }
+.jaw-session-text { margin-bottom: 12px; }
+.jaw-session-controls { display: flex; gap: 10px; align-items: center; }
+
+@media (min-width: 640px) {
+  .jaw-main { max-width: 1024px; }
+  .jaw-actions { flex-direction: row; gap: 16px; }
+  .jaw-actions > button { flex: 1; }
+  .jaw-players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .jaw-session-inner { flex-direction: row; align-items: center; justify-content: space-between; }
+  .jaw-session-text { margin-bottom: 0; }
+  .jaw-session-controls { flex-shrink: 0; }
+}
+`;
+
+/* ── SVG Components ── */
+const PacManMouth = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="11" fill={C.pacYellow} />
+    <path d="M12 12 L24 4 L24 20 Z" fill="#1a3a8a" />
+    <circle cx="14" cy="7" r="1.5" fill="#1a3a8a" />
+  </svg>
+);
+
+const Ghost = ({ size = 24, color = C.ghostRed }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 28 28">
+    <ellipse cx="14" cy="16" rx="12" ry="11" fill={color} />
+    <ellipse cx="6.5" cy="7" rx="3.2" ry="4.5" fill={color} />
+    <ellipse cx="21.5" cy="7" rx="3.2" ry="4.5" fill={color} />
+    <ellipse cx="6.5" cy="4.5" rx="1.6" ry="2" fill="white" opacity="0.2" />
+    <ellipse cx="21.5" cy="4.5" rx="1.6" ry="2" fill="white" opacity="0.2" />
+    <ellipse cx="9" cy="14" rx="3.8" ry="4" fill="white" />
+    <ellipse cx="19" cy="14" rx="3.8" ry="4" fill="white" />
+    <circle cx="10" cy="14.5" r="2.2" fill="#1a1a2e" />
+    <circle cx="20" cy="14.5" r="2.2" fill="#1a1a2e" />
+    <circle cx="11" cy="13.5" r="0.8" fill="white" />
+    <circle cx="21" cy="13.5" r="0.8" fill="white" />
+    <path d="M7 20 L9.5 22.5 L12 20 L14 22.5 L16 20 L18.5 22.5 L21 20" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <ellipse cx="14" cy="18" rx="5" ry="3" fill="white" opacity="0.08" />
+  </svg>
+);
+
+const Dot = ({ size = 6 }: { size?: number }) => (
+  <div style={{ width: size, height: size, borderRadius: '50%', background: C.dotWhite, opacity: 0.7, flexShrink: 0 }} />
+);
+
+const PowerPellet = ({ size = 14 }: { size?: number }) => {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => { const i = setInterval(() => setVisible(v => !v), 400); return () => clearInterval(i); }, []);
+  return <div style={{ width: size, height: size, borderRadius: '50%', background: C.dotWhite, opacity: visible ? 0.9 : 0.2, transition: 'opacity 0.3s' }} />;
+};
+
+const PlayIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="#1a3a8a" opacity="0.7">
+    <polygon points="4,1 18,10 4,19" />
+  </svg>
+);
+
+const CubeIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8" strokeLinejoin="round">
+    <path d="M12 2 L22 7 L22 17 L12 22 L2 17 L2 7 Z" />
+    <path d="M12 2 L12 12 L22 7" />
+    <path d="M12 12 L2 7" />
+    <path d="M12 12 L12 22" />
+  </svg>
+);
+
+const MailIcon = () => (
+  <svg width="22" height="17" viewBox="0 0 26 20" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8">
+    <rect x="1" y="1" width="24" height="18" rx="3" />
+    <path d="M1 1 L13 11 L25 1" />
+  </svg>
+);
+
+/* ── Dashboard ── */
 function DashboardContent() {
   const router = useRouter();
   const api = useApi();
-  const { isConnected, address, status } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { isConnected, address, isLoading, account, signOut } = useJawAccount();
 
   const [username, setUsername] = useState<string | null>(null);
   const [inviteCount, setInviteCount] = useState(0);
@@ -23,6 +126,23 @@ function DashboardContent() {
   const [sendAmount, setSendAmount] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [usdcBalance, setUsdcBalance] = useState<bigint | undefined>(undefined);
+  const [spendLimit, setSpendLimit] = useState('100');
+  const [selectedPlayer, setSelectedPlayer] = useState<{ id: string; username: string; ensName: string; smartAccountAddress: string; index: number } | null>(null);
+  const [playerMatches, setPlayerMatches] = useState<any[]>([]);
+  const [playerStatsLoading, setPlayerStatsLoading] = useState(false);
+
+  const { hasSession, isGranting, isRevoking, expiresAt: sessionExpiresAt, error: sessionError, grantSession, revokeSession } = useSessionPermission();
+
+  const getSessionTimeLeft = () => {
+    if (!sessionExpiresAt) return '';
+    const diff = sessionExpiresAt.getTime() - Date.now();
+    if (diff <= 0) return 'Expired';
+    const mins = Math.floor(diff / 60000);
+    if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    return `${mins}m`;
+  };
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   const copyAddress = (addr: string) => {
@@ -31,30 +151,31 @@ function DashboardContent() {
     setTimeout(() => setCopiedAddress(null), 1500);
   };
 
-  const { hasSession, isGranting, grantSession, checkSession, revokeSession, error: sessionError } = useSessionPermission();
-
-  // Read USDC balance
-  const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  });
-
-  // Send USDC via JAW (EIP-5792)
-  const { sendCalls, isPending: isSending } = useSendCalls();
+  const fetchBalance = async () => {
+    if (!address) return;
+    try {
+      const balance = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      });
+      setUsdcBalance(balance as bigint);
+    } catch {}
+  };
 
   useEffect(() => {
-    // Wait for wagmi to finish reconnecting before deciding to redirect
-    if (status === 'connecting' || status === 'reconnecting') return;
+    if (address) fetchBalance();
+  }, [address]);
+
+  useEffect(() => {
+    if (isLoading) return;
     if (!isConnected || !address) {
       router.push('/');
       return;
     }
 
     const init = async () => {
-      // Retry getUserByAddress a few times (ENS propagation can be slow after account creation)
       let userRes: Awaited<ReturnType<typeof api.getUserByAddress>> = { error: 'Not started' };
       for (let attempt = 0; attempt < 5; attempt++) {
         userRes = await api.getUserByAddress(address);
@@ -63,7 +184,6 @@ function DashboardContent() {
       }
 
       if (!userRes.data) {
-        // ENS never resolved — user needs to reconnect
         setUsername(null);
         setMatchesLoading(false);
         return;
@@ -98,15 +218,13 @@ function DashboardContent() {
         );
       }
       setMatchesLoading(false);
-
-      // Check for active session
-      checkSession();
     };
 
     init();
-  }, [api, router, isConnected, address, status]);
+  }, [api, router, isConnected, address, isLoading]);
 
-  const handleSendUSDC = (recipientAddress: string) => {
+  const handleSendUSDC = async (recipientAddress: string) => {
+    if (!account) return;
     setSendError(null);
     const amount = parseFloat(sendAmount);
     if (!amount || amount <= 0) {
@@ -114,298 +232,500 @@ function DashboardContent() {
       return;
     }
     const amountInUnits = parseUnits(sendAmount, TOKENS.USDC.decimals);
-    sendCalls({
-      calls: [{
+    setIsSending(true);
+    try {
+      await account.sendTransaction([{
         to: USDC_ADDRESS,
         data: encodeFunctionData({
           abi: ERC20_ABI,
           functionName: 'transfer',
           args: [recipientAddress as `0x${string}`, amountInUnits],
         }),
-      }],
-    }, {
-      onSuccess: () => {
-        setSendingTo(null);
-        setSendAmount('');
-        refetchBalance();
-      },
-      onError: (err) => {
-        setSendError(err.message || 'Transfer failed');
-      },
-    });
+      }], JAW_PAYMASTER_URL, { token: USDC_ADDRESS });
+      setSendingTo(null);
+      setSendAmount('');
+      fetchBalance();
+    } catch (err: any) {
+      if (err?.code === 4001) return;
+      setSendError(err.message || 'Transfer failed');
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const handleSignOut = async () => {
-    await revokeSession();
-    localStorage.clear();
-    disconnect();
+  const handleSignOut = () => {
+    signOut();
     router.push('/');
   };
 
+  const openPlayerProfile = async (player: typeof players[0], index: number) => {
+    setSelectedPlayer({ ...player, index });
+    setPlayerStatsLoading(true);
+    setPlayerMatches([]);
+    try {
+      const res = await api.getUserMatches(player.username);
+      if (res.data) setPlayerMatches(res.data.matches || []);
+    } catch {}
+    setPlayerStatsLoading(false);
+  };
+
+  const closePlayerProfile = () => {
+    setSelectedPlayer(null);
+    setPlayerMatches([]);
+  };
+
+  const playerStats = (() => {
+    if (!selectedPlayer) return { wins: 0, losses: 0, total: 0, winRate: 0 };
+    const settled = playerMatches.filter((m: any) => m.status === 'settled');
+    const wins = settled.filter((m: any) => m.winner_username === selectedPlayer.username).length;
+    const losses = settled.filter((m: any) => m.winner_username && m.winner_username !== selectedPlayer.username).length;
+    return { wins, losses, total: settled.length, winRate: (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0 };
+  })();
+
+  /* ── Loading / Error States ── */
   if (!username && !matchesLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-gray-500 p-4 text-center">
-        <p className="text-lg font-semibold mb-2">Account not found</p>
-        <p className="text-sm mb-4">Your username could not be resolved. Please sign out and try again.</p>
-        <button onClick={handleSignOut} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition">
-          Sign Out & Retry
+      <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Press Start 2P', 'Courier New', monospace", display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, textAlign: 'center' }}>
+        <style>{responsiveCSS}</style>
+        <p style={{ fontSize: 12, color: C.pacYellow, marginBottom: 10 }}>Account not found</p>
+        <p style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>Your username could not be resolved. Please sign out and try again.</p>
+        <button onClick={handleSignOut} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 8, background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 3px 0 #B8960A' }}>
+          SIGN OUT &amp; RETRY
         </button>
       </div>
     );
   }
 
   if (!username) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500">Loading...</div>;
+    return (
+      <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Press Start 2P', 'Courier New', monospace", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <style>{responsiveCSS}</style>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <PacManMouth size={28} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Loading...</span>
+        </div>
+      </div>
+    );
   }
 
+  /* ── Main Dashboard ── */
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900">JAW Games</h1>
-            <p className="text-xs sm:text-sm text-gray-600 truncate">{username}.{ENS_DOMAIN}</p>
+    <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'Press Start 2P', 'Courier New', monospace", position: 'relative', overflow: 'hidden' }}>
+      <style>{responsiveCSS}</style>
+
+      {/* Floating dots background */}
+      {Array.from({ length: 30 }, (_, i) => (
+        <div key={i} style={{
+          position: 'fixed', left: `${(i * 37) % 100}%`, top: `${(i * 53) % 100}%`,
+          width: i % 7 === 0 ? 8 : 3, height: i % 7 === 0 ? 8 : 3,
+          borderRadius: '50%', background: C.dotWhite,
+          opacity: i % 7 === 0 ? 0.06 : 0.03, pointerEvents: 'none',
+        }} />
+      ))}
+
+      {/* ===== HEADER ===== */}
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PacManMouth size={32} />
+            <div style={{ fontSize: 14, color: C.pacYellow, textShadow: '0 0 12px rgba(255,215,0,0.4)' }}>
+              JAW Games
+            </div>
+          </div>
+          <button
+            onClick={handleSignOut}
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', fontSize: 7, color: 'rgba(255,255,255,0.6)', padding: '8px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          >SIGN OUT</button>
+        </div>
+
+        {/* Balance card */}
+        <div style={{ background: 'rgba(0,0,30,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.92)', marginBottom: 6 }}>
+              {username}.{ENS_DOMAIN}
+            </div>
             {address && (
               <button
                 onClick={() => copyAddress(address)}
-                className="text-xs text-gray-400 hover:text-gray-600 font-mono transition"
+                style={{ background: 'none', border: 'none', fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.55)', cursor: 'pointer', padding: 0, transition: 'color 0.15s' }}
               >
                 {copiedAddress === address ? 'Copied!' : truncateAddress(address)}
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className="text-right">
-              <p className="text-sm sm:text-lg font-bold text-gray-900">
-                {usdcBalance !== undefined ? Number(formatUnits(usdcBalance as bigint, TOKENS.USDC.decimals)).toFixed(2) : '...'} USDC
-              </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.pacYellow, textShadow: '0 0 14px rgba(255,215,0,0.35)' }}>
+                {usdcBalance !== undefined ? Number(formatUnits(usdcBalance, TOKENS.USDC.decimals)).toFixed(2) : '...'}
+              </div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700, color: 'rgba(255,215,0,0.7)', marginTop: 3 }}>
+                USDC
+              </div>
             </div>
-            <button onClick={handleSignOut} className="text-xs sm:text-sm text-gray-600 hover:text-gray-900">
-              Sign Out
-            </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:py-12">
-        {/* Session Permission Banner */}
-        {!hasSession ? (
-          <div className="mb-4 sm:mb-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-yellow-800 text-sm">Enable popup-free gameplay</p>
-              <p className="text-yellow-700 text-xs mt-1">Grant a 1-hour game session to play without wallet popups.</p>
-              {sessionError && <p className="text-red-600 text-xs mt-1">{sessionError}</p>}
+      {/* ===== QUICK BET MODE ===== */}
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
+        <div style={{ background: 'rgba(0,0,30,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16, padding: '14px 18px' }}>
+          {hasSession && sessionExpiresAt ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <PowerPellet size={8} />
+                <span style={{ fontSize: 9, color: '#00FF88' }}>
+                  Session active &mdash; {getSessionTimeLeft()}
+                </span>
+              </div>
+              <button
+                onClick={revokeSession}
+                disabled={isRevoking}
+                style={{ fontFamily: 'inherit', fontSize: 7, background: 'rgba(255,68,68,0.15)', color: C.ghostRed, border: '1px solid rgba(255,68,68,0.3)', borderRadius: 7, padding: '6px 10px', cursor: 'pointer', transition: 'all 0.15s', opacity: isRevoking ? 0.5 : 1 }}
+              >
+                {isRevoking ? 'REVOKING...' : 'REVOKE'}
+              </button>
             </div>
-            <button
-              onClick={grantSession}
-              disabled={isGranting}
-              className="bg-yellow-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-yellow-700 transition disabled:opacity-50 whitespace-nowrap"
-            >
-              {isGranting ? 'Granting...' : 'Grant Session'}
-            </button>
-          </div>
-        ) : (
-          <div className="mb-4 sm:mb-6 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <p className="text-green-800 text-sm font-medium">Session active — no wallet popups needed</p>
+          ) : (
+            <div className="jaw-session-inner">
+              <div className="jaw-session-text">
+                <div style={{ fontSize: 10, color: C.pacYellow, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PowerPellet size={8} />
+                  QUICK BET MODE
+                </div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                  Play without Face ID each time
+                </div>
+              </div>
+              <div className="jaw-session-controls">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,30,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 12px', flex: '0 0 auto' }}>
+                  <input
+                    value={spendLimit}
+                    onChange={(e) => setSpendLimit(e.target.value)}
+                    style={{ width: 45, background: 'transparent', border: 'none', outline: 'none', fontFamily: "'Press Start 2P', monospace", fontSize: 11, color: C.dotWhite, textAlign: 'center' }}
+                  />
+                  <span style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>
+                    USDC/hr
+                  </span>
+                </div>
+                <button
+                  onClick={() => grantSession(spendLimit)}
+                  disabled={isGranting || !spendLimit || Number(spendLimit) <= 0}
+                  style={{ padding: '12px 14px', fontFamily: "'Press Start 2P', monospace", fontSize: 8, background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 3px 0 #B8960A', transition: 'all 0.15s', opacity: (isGranting || !spendLimit || Number(spendLimit) <= 0) ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                >
+                  {isGranting ? 'Granting...' : 'Enable Session (1h)'}
+                </button>
+              </div>
+              {sessionError && (
+                <div style={{ fontSize: 8, color: C.ghostRed, marginTop: 8 }}>{sessionError}</div>
+              )}
             </div>
-            <button
-              onClick={async () => { await revokeSession(); }}
-              className="text-green-700 text-xs underline hover:text-green-900"
-            >
-              Revoke
-            </button>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-          {/* Games Card */}
+      {/* ===== ACTION CARDS — stacked on mobile, 3-col grid on desktop ===== */}
+      <div className="jaw-main" style={{ padding: '20px 20px 0' }}>
+        <div className="jaw-actions">
+          {/* Play */}
           <button
             onClick={() => router.push('/games')}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
+            style={{ padding: '22px 20px', background: `linear-gradient(135deg, ${C.playYellow}, #FFC107)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B8960A, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left' }}
           >
-            <div className="flex items-center">
-              <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold">Play</h2>
-                <p className="text-blue-100 text-sm">Challenge someone to Tic-Tac-Toe</p>
+            <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <PlayIcon />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, color: '#1a3a8a', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Play</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(26,58,138,0.8)' }}>
+                Challenge someone to a game
               </div>
             </div>
           </button>
 
-          {/* LifeBet Card */}
+          {/* LifeBet */}
           <button
             onClick={() => router.push('/bets')}
-            className="bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left"
+            style={{ padding: '22px 20px', background: `linear-gradient(135deg, ${C.betOrange}, #FF6B35)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B85A20, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left' }}
           >
-            <div className="flex items-center">
-              <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold">LifeBet</h2>
-                <p className="text-teal-100 text-sm">Bet on real life events</p>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CubeIcon />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, color: 'white', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>LifeBet</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+                Bet on real life events
               </div>
             </div>
           </button>
 
-          {/* Invites Card */}
+          {/* Invites */}
           <button
             onClick={() => router.push('/invites')}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-lg transition transform hover:scale-105 text-left relative"
+            style={{ padding: '22px 20px', background: `linear-gradient(135deg, ${C.invitePink}, #FF4D6D)`, border: 'none', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 5px 0 #B83A55, 0 7px 20px rgba(0,0,0,0.15)', transition: 'all 0.15s', textAlign: 'left', position: 'relative' }}
           >
-            <div className="flex items-center">
-              <svg className="w-10 h-10 sm:w-12 sm:h-12 mr-3 sm:mr-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold">Invites</h2>
-                <p className="text-purple-100 text-sm">View pending challenges</p>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <MailIcon />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, color: 'white', marginBottom: 5, fontFamily: "'Press Start 2P', monospace" }}>Invites</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+                View pending challenges
               </div>
             </div>
             {inviteCount > 0 && (
-              <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+              <div style={{ position: 'absolute', top: 10, right: 14, background: C.ghostRed, color: 'white', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Press Start 2P', monospace" }}>
                 {inviteCount}
               </div>
             )}
           </button>
         </div>
+      </div>
 
-        {/* Players */}
-        <div className="mt-8 sm:mt-12">
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Players</h3>
-          {players.length === 0 ? (
-            <div className="bg-white rounded-xl shadow p-6">
-              <p className="text-gray-500 text-center py-4">No other players yet.</p>
+      {/* ===== PLAYERS — stacked on mobile, 2-col grid on desktop ===== */}
+      <div className="jaw-main" style={{ padding: '24px 20px 0' }}>
+        <h2 style={{ fontSize: 13, color: C.dotWhite, margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 4 }}>{[1,2,3].map(i => <Dot key={i} size={4} />)}</div>
+          Players
+          <div style={{ display: 'flex', gap: 4 }}>{[1,2,3].map(i => <Dot key={i} size={4} />)}</div>
+        </h2>
+
+        {players.length === 0 ? (
+          <div style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '12px 0' }}>
+              No other players yet.
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {players.map((player) => (
-                <div key={player.id} className="bg-white rounded-lg shadow p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{player.username}</p>
-                      <p className="text-xs text-gray-500 truncate">{player.ensName}</p>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyAddress(player.smartAccountAddress); }}
-                        className="text-xs text-gray-400 hover:text-gray-600 font-mono transition"
-                      >
-                        {copiedAddress === player.smartAccountAddress ? 'Copied!' : truncateAddress(player.smartAccountAddress)}
-                      </button>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => { setSendingTo(sendingTo === player.id ? null : player.id); setSendAmount(''); setSendError(null); }}
-                        className="bg-green-600 text-white text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition"
-                      >
-                        Send
-                      </button>
-                      <button
-                        onClick={() => router.push(`/create-match?opponent=${player.username}`)}
-                        className="bg-blue-600 text-white text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
-                      >
-                        Challenge
-                      </button>
+          </div>
+        ) : (
+          <div className="jaw-players-grid">
+            {players.map((player, i) => (
+              <div
+                key={player.id}
+                onClick={() => openPlayerProfile(player, i)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <Ghost size={22} color={ghostColors[i % 4]} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 9, color: C.dotWhite }}>{player.username}</div>
+                      <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.45)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.ensName}</div>
+                      <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,255,255,0.25)', marginTop: 1 }}>
+                        {truncateAddress(player.smartAccountAddress)}
+                      </div>
                     </div>
                   </div>
-                  {sendingTo === player.id && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          value={sendAmount}
-                          onChange={(e) => setSendAmount(e.target.value)}
-                          placeholder="Amount USDC"
-                          step="0.01"
-                          min="0"
-                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        />
-                        <button
-                          onClick={() => handleSendUSDC(player.smartAccountAddress)}
-                          disabled={isSending || !sendAmount}
-                          className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition disabled:opacity-50"
-                        >
-                          {isSending ? '...' : 'Confirm'}
-                        </button>
-                      </div>
-                      {sendError && (
-                        <p className="text-xs text-red-600 mt-1">{sendError}</p>
-                      )}
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSendingTo(sendingTo === player.id ? null : player.id); setSendAmount(''); setSendError(null); }}
+                      style={{ fontFamily: 'inherit', fontSize: 6, padding: '7px 10px', background: 'rgba(0,229,255,0.15)', color: C.ghostCyan, border: '1px solid rgba(0,229,255,0.3)', borderRadius: 7, cursor: 'pointer', transition: 'all 0.15s' }}
+                    >SEND</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); router.push(`/create-match?opponent=${player.username}`); }}
+                      style={{ fontFamily: 'inherit', fontSize: 6, padding: '7px 8px', background: 'rgba(255,215,0,0.15)', color: C.pacYellow, border: '1px solid rgba(255,215,0,0.3)', borderRadius: 7, cursor: 'pointer', transition: 'all 0.15s' }}
+                    >CHALLENGE</button>
+                  </div>
                 </div>
-              ))}
+
+                {sendingTo === player.id && (
+                  <div onClick={(e) => e.stopPropagation()} style={{ background: 'rgba(0,0,30,0.3)', border: '1px solid rgba(0,229,255,0.2)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        value={sendAmount}
+                        onChange={(e) => setSendAmount(e.target.value)}
+                        placeholder="Amount"
+                        step="0.01"
+                        min="0"
+                        style={{ flex: 1, minWidth: 0, background: 'rgba(0,0,30,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 10px', fontFamily: "'Press Start 2P', monospace", fontSize: 9, color: C.dotWhite, outline: 'none' }}
+                      />
+                      <span style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,255,255,0.35)' }}>USDC</span>
+                      <button
+                        onClick={() => handleSendUSDC(player.smartAccountAddress)}
+                        disabled={isSending || !sendAmount}
+                        style={{ fontFamily: 'inherit', fontSize: 7, padding: '8px 12px', background: 'rgba(0,229,255,0.2)', color: C.ghostCyan, border: '1px solid rgba(0,229,255,0.4)', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s', opacity: (isSending || !sendAmount) ? 0.5 : 1 }}
+                      >
+                        {isSending ? '...' : 'CONFIRM'}
+                      </button>
+                    </div>
+                    {sendError && (
+                      <div style={{ fontSize: 7, color: C.ghostRed, marginTop: 6 }}>{sendError}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ===== PLAYER PROFILE POPUP ===== */}
+      {selectedPlayer && (
+        <div
+          onClick={closePlayerProfile}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'rgba(0,0,30,0.95)', border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 400, maxHeight: '85vh', overflowY: 'auto', position: 'relative' }}
+          >
+            {/* Close button */}
+            <button
+              onClick={closePlayerProfile}
+              style={{ position: 'absolute', top: 12, right: 14, background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 16, cursor: 'pointer', fontFamily: "'Courier New', monospace", lineHeight: 1 }}
+            >X</button>
+
+            {/* Ghost + Name */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 20 }}>
+              <Ghost size={48} color={ghostColors[selectedPlayer.index % 4]} />
+              <div style={{ fontSize: 14, color: C.dotWhite, marginTop: 10 }}>{selectedPlayer.username}</div>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>{selectedPlayer.ensName}</div>
             </div>
-          )}
+
+            {/* Full address */}
+            <div style={{ background: 'rgba(0,0,30,0.5)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 12px', marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>WALLET ADDRESS</div>
+              <button
+                onClick={() => copyAddress(selectedPlayer.smartAccountAddress)}
+                style={{ background: 'none', border: 'none', fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.7)', cursor: 'pointer', padding: 0, wordBreak: 'break-all', textAlign: 'left', lineHeight: 1.5, transition: 'color 0.15s' }}
+              >
+                {copiedAddress === selectedPlayer.smartAccountAddress ? 'Copied!' : selectedPlayer.smartAccountAddress}
+              </button>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <div style={{ flex: 1, background: 'rgba(0,255,136,0.1)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, color: '#00FF88' }}>{playerStatsLoading ? '...' : playerStats.wins}</div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(0,255,136,0.6)', marginTop: 4 }}>WINS</div>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, color: C.ghostRed }}>{playerStatsLoading ? '...' : playerStats.losses}</div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,68,68,0.6)', marginTop: 4 }}>LOSSES</div>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, color: C.pacYellow }}>{playerStatsLoading ? '...' : `${playerStats.winRate}%`}</div>
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 7, color: 'rgba(255,215,0,0.6)', marginTop: 4 }}>WIN RATE</div>
+              </div>
+            </div>
+
+            {/* Recent matches */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Dot size={4} /> RECENT MATCHES
+              </div>
+              {playerStatsLoading ? (
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '8px 0' }}>Loading...</div>
+              ) : playerMatches.filter((m: any) => m.status === 'settled').length === 0 ? (
+                <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: '8px 0' }}>No completed matches</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {playerMatches.filter((m: any) => m.status === 'settled').slice(0, 5).map((match: any) => {
+                    const opponent = match.player_a_username === selectedPlayer.username ? match.player_b_username : match.player_a_username;
+                    const won = match.winner_username === selectedPlayer.username;
+                    const stake = Number(formatUnits(BigInt(match.stake_amount), 6));
+                    return (
+                      <div key={match.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <PacManMouth size={14} />
+                          <span style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,255,255,0.6)' }}>vs {opponent}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,215,0,0.7)' }}>{stake} USDC</span>
+                          <span style={{ fontSize: 7, color: won ? '#00FF88' : C.ghostRed }}>{won ? 'WON' : 'LOST'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { closePlayerProfile(); setSendingTo(selectedPlayer.id); setSendAmount(''); setSendError(null); }}
+                style={{ flex: 1, fontFamily: "'Press Start 2P', monospace", fontSize: 8, padding: '12px 10px', background: 'rgba(0,229,255,0.15)', color: C.ghostCyan, border: '1px solid rgba(0,229,255,0.3)', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}
+              >SEND USDC</button>
+              <button
+                onClick={() => { closePlayerProfile(); router.push(`/create-match?opponent=${selectedPlayer.username}`); }}
+                style={{ flex: 1, fontFamily: "'Press Start 2P', monospace", fontSize: 8, padding: '12px 10px', background: C.pacYellow, color: '#1a3a8a', border: 'none', borderRadius: 10, cursor: 'pointer', boxShadow: '0 3px 0 #B8960A', transition: 'all 0.15s' }}
+              >CHALLENGE</button>
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* Recent Matches */}
-        <div className="mt-8 sm:mt-12">
-          <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Recent Matches</h3>
-          {matchesLoading ? (
-            <div className="bg-white rounded-xl shadow p-6 text-center text-gray-500">Loading...</div>
-          ) : matches.length === 0 ? (
-            <div className="bg-white rounded-xl shadow p-6">
-              <p className="text-gray-500 text-center py-4">
-                No matches yet. Start by challenging an opponent!
-              </p>
+      {/* ===== RECENT MATCHES ===== */}
+      <div className="jaw-main" style={{ padding: '24px 20px 40px' }}>
+        <h2 style={{ fontSize: 13, color: C.dotWhite, margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <PowerPellet size={8} /> Recent Matches
+        </h2>
+
+        {matchesLoading ? (
+          <div style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '14px 16px', textAlign: 'center' }}>
+            <span style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Loading...</span>
+          </div>
+        ) : matches.length === 0 ? (
+          <div style={{ background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '12px 0' }}>
+              No matches yet. Challenge an opponent!
             </div>
-          ) : (
-            <div className="space-y-3">
-              {matches.slice(0, 10).map((match) => {
-                const stakeDisplay = Number(formatUnits(BigInt(match.stake_amount), 6));
-                const tokenSymbol = getTokenSymbol(match.token_address);
-                const opponent = match.player_a_username === username ? match.player_b_username : match.player_a_username;
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {matches.slice(0, 10).map((match) => {
+              const stakeDisplay = Number(formatUnits(BigInt(match.stake_amount), 6));
+              const tokenSymbol = getTokenSymbol(match.token_address);
+              const opponent = match.player_a_username === username ? match.player_b_username : match.player_a_username;
+              const statusLabel: Record<string, string> = {
+                pending_creation: 'Pending',
+                created: 'Awaiting opponent',
+                accepted: 'Deposit required',
+                ready: 'Ready to play',
+                in_progress: 'In progress',
+                settling: 'Settling',
+                settled: 'Completed',
+              };
+              const isWin = match.status === 'settled' && match.winner_username === username;
+              const isLoss = match.status === 'settled' && match.winner_username && match.winner_username !== username;
 
-                const statusLabel: Record<string, string> = {
-                  pending_creation: 'Pending',
-                  created: 'Awaiting opponent',
-                  accepted: 'Deposit required',
-                  ready: 'Ready to play',
-                  in_progress: 'In progress',
-                  settling: 'Settling',
-                  settled: 'Completed',
-                };
-
-                return (
-                  <button
-                    key={match.id}
-                    onClick={() => router.push(`/matches/${encodeURIComponent(match.match_id)}`)}
-                    className="w-full bg-white rounded-lg shadow p-4 text-left hover:shadow-md transition flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-xl sm:text-2xl shrink-0">#</span>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-900 truncate">vs {opponent || 'Unknown'}</p>
-                        <p className="text-xs sm:text-sm text-gray-500">{statusLabel[match.status] || match.status}</p>
+              return (
+                <button
+                  key={match.id}
+                  onClick={() => router.push(`/matches/${encodeURIComponent(match.match_id)}`)}
+                  style={{ width: '100%', background: C.cardBg, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <PacManMouth size={20} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 9, color: C.dotWhite }}>vs {opponent || 'Unknown'}</div>
+                      <div style={{ fontFamily: "'Courier New', monospace", fontSize: 8, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>
+                        {statusLabel[match.status] || match.status}
                       </div>
                     </div>
-                    <div className="text-right shrink-0 ml-2">
-                      <p className="font-semibold text-gray-900 text-sm sm:text-base">{stakeDisplay} {tokenSymbol}</p>
-                      {match.status === 'settled' && match.winner_username && (
-                        <p className={`text-xs ${match.winner_username === username ? 'text-green-600' : 'text-red-600'}`}>
-                          {match.winner_username === username ? 'Won' : 'Lost'}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </main>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 9, color: C.pacYellow }}>{stakeDisplay} {tokenSymbol}</div>
+                    {isWin && <div style={{ fontSize: 8, color: '#00FF88', marginTop: 3 }}>WON</div>}
+                    {isLoss && <div style={{ fontSize: 8, color: C.ghostRed, marginTop: 3 }}>LOST</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div style={{ background: '#2563EB', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Loading...</span>
+      </div>
+    }>
       <DashboardContent />
     </Suspense>
   );

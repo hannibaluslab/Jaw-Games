@@ -6,6 +6,8 @@ const BetEvent = require('../models/BetEvent');
 const User = require('../models/User');
 const BetSettlementService = require('../services/betSettlementService');
 const { betSettlerContract } = require('../config/blockchain');
+const Session = require('../models/Session');
+const SessionService = require('../services/sessionService');
 
 class BetController {
   /**
@@ -651,6 +653,159 @@ class BetController {
     } catch (error) {
       console.error('Get pending judge invites error:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+  /**
+   * Place a bet via session permission (no wallet popup)
+   */
+  static async placeBetViaSession(req, res) {
+    try {
+      const { userId } = req.user;
+      const { betId } = req.params;
+      const { outcome, amount } = req.body;
+
+      // Find active session
+      const session = await Session.findActiveByUserId(userId);
+      if (!session) {
+        return res.status(400).json({ error: 'No active session', fallback: true });
+      }
+
+      // Validate bet
+      const bet = await Bet.findById(betId);
+      if (!bet || bet.status !== 'open') {
+        return res.status(400).json({ error: 'Bet not available' });
+      }
+      if (new Date(bet.betting_deadline) <= new Date()) {
+        return res.status(400).json({ error: 'Betting deadline passed' });
+      }
+
+      const tokenAddress = bet.token_address || process.env.USDC_ADDRESS || '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+
+      // Execute on-chain via session
+      const result = await SessionService.executePlaceBet(session.permission_id, {
+        betId,
+        outcome,
+        amount: amount || bet.stake_amount,
+        tokenAddress,
+      });
+
+      // Update DB
+      const user = await User.findById(userId);
+      await BetParticipant.create({
+        betId,
+        userId,
+        username: user.username,
+        role: 'bettor',
+        outcome: parseInt(outcome),
+        amount: amount || bet.stake_amount,
+        deposited: true,
+      });
+
+      const newPool = BigInt(bet.total_pool || '0') + BigInt(amount || bet.stake_amount);
+      await Bet.updatePool(betId, newPool.toString());
+
+      await BetEvent.create({
+        betId,
+        eventType: 'bet_placed',
+        actorUserId: userId,
+        data: JSON.stringify({ outcome, amount: amount || bet.stake_amount, viaSession: true }),
+      });
+
+      res.json({ message: 'Bet placed via session', txBatchId: result.id });
+    } catch (err) {
+      console.error('placeBetViaSession error:', err);
+      if (err.code === 'JAW_RPC_UNAVAILABLE') {
+        return res.status(503).json({ error: err.message, fallback: true });
+      }
+      res.status(500).json({ error: err.message || 'Session bet failed', fallback: true });
+    }
+  }
+
+  /**
+   * Claim winnings via session permission (no wallet popup)
+   */
+  static async claimWinningsViaSession(req, res) {
+    try {
+      const { userId } = req.user;
+      const { betId } = req.params;
+
+      const session = await Session.findActiveByUserId(userId);
+      if (!session) {
+        return res.status(400).json({ error: 'No active session', fallback: true });
+      }
+
+      const bet = await Bet.findById(betId);
+      if (!bet || bet.status !== 'settled') {
+        return res.status(400).json({ error: 'Bet not settled' });
+      }
+
+      const participant = await BetParticipant.findByBetAndUser(betId, userId);
+      if (!participant || participant.outcome !== bet.winning_outcome || participant.claimed) {
+        return res.status(400).json({ error: 'Not eligible to claim' });
+      }
+
+      const result = await SessionService.executeClaimWinnings(session.permission_id, { betId });
+
+      await BetParticipant.markClaimed(betId, userId);
+
+      await BetEvent.create({
+        betId,
+        eventType: 'winnings_claimed',
+        actorUserId: userId,
+        data: JSON.stringify({ viaSession: true }),
+      });
+
+      res.json({ message: 'Winnings claimed via session', txBatchId: result.id });
+    } catch (err) {
+      console.error('claimWinningsViaSession error:', err);
+      if (err.code === 'JAW_RPC_UNAVAILABLE') {
+        return res.status(503).json({ error: err.message, fallback: true });
+      }
+      res.status(500).json({ error: err.message || 'Session claim failed', fallback: true });
+    }
+  }
+
+  /**
+   * Claim refund via session permission (no wallet popup)
+   */
+  static async claimRefundViaSession(req, res) {
+    try {
+      const { userId } = req.user;
+      const { betId } = req.params;
+
+      const session = await Session.findActiveByUserId(userId);
+      if (!session) {
+        return res.status(400).json({ error: 'No active session', fallback: true });
+      }
+
+      const bet = await Bet.findById(betId);
+      if (!bet || !['cancelled', 'refunded', 'expired'].includes(bet.status)) {
+        return res.status(400).json({ error: 'Bet not eligible for refund' });
+      }
+
+      const participant = await BetParticipant.findByBetAndUser(betId, userId);
+      if (!participant || !participant.deposited || participant.claimed) {
+        return res.status(400).json({ error: 'Not eligible for refund' });
+      }
+
+      const result = await SessionService.executeClaimRefund(session.permission_id, { betId });
+
+      await BetParticipant.markClaimed(betId, userId);
+
+      await BetEvent.create({
+        betId,
+        eventType: 'refund_claimed',
+        actorUserId: userId,
+        data: JSON.stringify({ viaSession: true }),
+      });
+
+      res.json({ message: 'Refund claimed via session', txBatchId: result.id });
+    } catch (err) {
+      console.error('claimRefundViaSession error:', err);
+      if (err.code === 'JAW_RPC_UNAVAILABLE') {
+        return res.status(503).json({ error: err.message, fallback: true });
+      }
+      res.status(500).json({ error: err.message || 'Session refund failed', fallback: true });
     }
   }
 }

@@ -3,9 +3,20 @@
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { formatUnits } from 'viem';
+import dynamic from 'next/dynamic';
 import { useGameWebSocket } from '@/lib/hooks/useGameWebSocket';
 import { useApi } from '@/lib/hooks/useApi';
 import { BLOCK_EXPLORER_URL, PLATFORM_FEE, WINNER_SHARE, getTokenSymbol } from '@/lib/contracts';
+import TicTacToeBoard from './components/TicTacToeBoard';
+
+const BackgammonBoard = dynamic(() => import('./components/BackgammonBoard'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
+      <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full" />
+    </div>
+  ),
+});
 
 export default function PlayGamePage() {
   const router = useRouter();
@@ -40,12 +51,12 @@ export default function PlayGamePage() {
 function GameBoard({ matchId, userId, username }: { matchId: string; userId: string; username: string }) {
   const router = useRouter();
   const api = useApi();
-  const { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash } = useGameWebSocket(matchId, userId);
+  const { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash, validMoves, noMoves } = useGameWebSocket(matchId, userId);
 
   const [matchData, setMatchData] = useState<any>(null);
   const [showOverlay, setShowOverlay] = useState(false);
 
-  // Fetch match details for stake/token info
+  // Fetch match details for stake/token info and game_id
   useEffect(() => {
     api.getMatch(matchId).then((res) => {
       if (res.data) {
@@ -61,6 +72,9 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
       return () => clearTimeout(timer);
     }
   }, [gameEnd]);
+
+  const gameId = matchData?.game_id || 'tictactoe';
+  const isBackgammon = gameId === 'backgammon';
 
   if (!connected) {
     return (
@@ -84,15 +98,6 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
     );
   }
 
-  const mySymbol = gameState.playerX === userId ? 'X' : 'O';
-  const isMyTurn = gameState.currentTurn === mySymbol && !gameState.winner;
-  const isGameOver = !!gameState.winner;
-
-  const handleCellClick = (index: number) => {
-    if (!isMyTurn || gameState.board[index] !== null || isGameOver) return;
-    sendMove(index);
-  };
-
   // Compute amounts
   const stakeNum = matchData ? Number(formatUnits(BigInt(matchData.stake_amount), 6)) : 0;
   const tokenSymbol = matchData ? getTokenSymbol(matchData.token_address) : 'USDC';
@@ -103,57 +108,31 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
   const iWon = gameEnd?.winner === userId;
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Draw flash overlay */}
-      {drawFlash && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" style={{ animation: 'fadeIn 0.2s ease-out' }}>
-          <div className="text-center" style={{ animation: 'slideUp 0.3s ease-out' }}>
-            <div className="text-6xl mb-3">🤝</div>
-            <h2 className="text-3xl font-black text-yellow-400 mb-2">DRAW!</h2>
-            <p className="text-gray-400">New round starting...</p>
-          </div>
+    <div className={`${isBackgammon ? 'h-screen' : 'min-h-screen'} bg-gray-900 flex flex-col items-center justify-center ${isBackgammon ? '' : 'p-4'} relative overflow-hidden`}>
+      {/* Stake info for TicTacToe */}
+      {!isBackgammon && matchData && (
+        <div className="absolute top-4 right-4 text-gray-500 text-xs">
+          {stakeNum} {tokenSymbol} stake
         </div>
       )}
 
-      {/* Turn indicator */}
-      <div className="mb-4 sm:mb-6 text-center">
-        <p className="text-gray-400 text-xs sm:text-sm mb-1">
-          You are <span className={`font-bold ${mySymbol === 'X' ? 'text-blue-400' : 'text-red-400'}`}>{mySymbol}</span>
-          {matchData && <span className="text-gray-600 ml-2">| {stakeNum} {tokenSymbol} stake</span>}
-        </p>
-        {!isGameOver && (
-          <p className={`text-lg sm:text-xl font-bold ${isMyTurn ? 'text-green-400' : 'text-gray-500'}`}>
-            {isMyTurn ? 'Your turn' : "Opponent's turn"}
-          </p>
-        )}
-      </div>
-
-      {/* Board */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 w-[min(80vw,320px)] h-[min(80vw,320px)]">
-        {gameState.board.map((cell, index) => (
-          <button
-            key={index}
-            onClick={() => handleCellClick(index)}
-            disabled={!isMyTurn || cell !== null || isGameOver}
-            className={`
-              w-full h-full rounded-lg sm:rounded-xl text-4xl sm:text-5xl font-bold flex items-center justify-center transition-all
-              ${cell === null && isMyTurn && !isGameOver
-                ? 'bg-gray-700 hover:bg-gray-600 cursor-pointer'
-                : 'bg-gray-800 cursor-default'}
-              ${cell === null && isMyTurn && !isGameOver ? 'hover:scale-105' : ''}
-              border-2 border-gray-700
-            `}
-          >
-            {cell === 'X' && <span className="text-blue-400">X</span>}
-            {cell === 'O' && <span className="text-red-400">O</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Move count */}
-      <div className="mt-4 text-gray-500 text-sm">
-        Move {gameState.moves.length} of 9
-      </div>
+      {/* Game board */}
+      {isBackgammon ? (
+        <BackgammonBoard
+          gameState={gameState}
+          userId={userId}
+          sendMove={sendMove}
+          validMoves={validMoves}
+          noMoves={noMoves}
+        />
+      ) : (
+        <TicTacToeBoard
+          gameState={gameState}
+          userId={userId}
+          sendMove={sendMove}
+          drawFlash={drawFlash}
+        />
+      )}
 
       {/* Game Over Overlay */}
       {gameEnd && showOverlay && (
@@ -250,7 +229,7 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
             {/* Action buttons */}
             <div className="bg-gray-900 px-6 pt-2 pb-6 flex gap-3">
               <button
-                onClick={() => router.push('/create-match?game=tictactoe')}
+                onClick={() => router.push(`/create-match?game=${gameId}`)}
                 className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-xl font-bold hover:bg-blue-700 transition text-sm"
               >
                 Play Again
@@ -267,10 +246,12 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
       )}
 
       {/* Connection status */}
-      <div className="fixed bottom-4 left-4 flex items-center gap-2 text-xs text-gray-500">
-        <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-        {connected ? 'Connected' : 'Disconnected'}
-      </div>
+      {!isBackgammon && (
+        <div className="fixed bottom-4 left-4 flex items-center gap-2 text-xs text-gray-500">
+          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+          {connected ? 'Connected' : 'Disconnected'}
+        </div>
+      )}
 
       {/* CSS animations */}
       <style jsx>{`

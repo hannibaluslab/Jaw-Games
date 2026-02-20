@@ -1,111 +1,147 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useGrantPermissions } from '@jaw.id/wagmi';
-import { useApi } from './useApi';
-import { ESCROW_CONTRACT_ADDRESS, BET_SETTLER_CONTRACT_ADDRESS, USDC_ADDRESS, USDT_ADDRESS } from '@/lib/contracts';
+import { parseUnits } from 'viem';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
+import { useApi } from '@/lib/hooks/useApi';
+import { USDC_ADDRESS, BET_SETTLER_CONTRACT_ADDRESS } from '@/lib/contracts';
+
+interface SessionState {
+  hasSession: boolean;
+  isGranting: boolean;
+  isRevoking: boolean;
+  expiresAt: Date | null;
+  error: string | null;
+}
 
 export function useSessionPermission() {
+  const { account } = useJawAccount();
   const api = useApi();
-  const { mutateAsync: grantPermission, isPending: isGranting } = useGrantPermissions();
 
-  const [hasSession, setHasSession] = useState(false);
-  const [spenderAddress, setSpenderAddress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<SessionState>({
+    hasSession: false,
+    isGranting: false,
+    isRevoking: false,
+    expiresAt: null,
+    error: null,
+  });
 
-  // Fetch spender address on mount
+  // Check for active session on mount
   useEffect(() => {
-    api.getSpenderAddress().then((res) => {
-      if (res.data?.spenderAddress) {
-        setSpenderAddress(res.data.spenderAddress);
+    api.getActiveSession().then((res) => {
+      if (res.data?.active && res.data.expiresAt) {
+        const expires = new Date(res.data.expiresAt);
+        if (expires > new Date()) {
+          setState((s) => ({ ...s, hasSession: true, expiresAt: expires }));
+        }
       }
     });
   }, [api]);
 
-  const checkSession = useCallback(async () => {
-    const res = await api.getActiveSession();
-    const active = res.data?.active ?? false;
-    setHasSession(active);
-    return active;
-  }, [api]);
-
-  const grantSession = useCallback(async () => {
-    if (!spenderAddress) {
-      setError('Spender address not loaded');
-      return false;
+  // Auto-expire session when time runs out
+  useEffect(() => {
+    if (!state.expiresAt) return;
+    const remaining = state.expiresAt.getTime() - Date.now();
+    if (remaining <= 0) {
+      setState((s) => ({ ...s, hasSession: false, expiresAt: null }));
+      return;
     }
+    const timer = setTimeout(() => {
+      setState((s) => ({ ...s, hasSession: false, expiresAt: null }));
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [state.expiresAt]);
 
-    setError(null);
+  const grantSession = useCallback(async (spendLimit: string = '100') => {
+    if (!account) return;
+    setState((s) => ({ ...s, isGranting: true, error: null }));
 
     try {
-      const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+      // 1. Get backend spender address
+      const spenderRes = await api.getSpenderAddress();
+      if (spenderRes.error || !spenderRes.data?.spenderAddress) {
+        throw new Error(spenderRes.error || 'Failed to get spender address');
+      }
+      const spenderAddress = spenderRes.data.spenderAddress;
 
-      const result = await grantPermission({
-        expiry,
-        spender: spenderAddress as `0x${string}`,
-        permissions: {
+      // 2. Grant ERC-7715 permission via Account.grantPermissions()
+      const expirySeconds = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+      const result = await account.grantPermissions(
+        expirySeconds,
+        spenderAddress as `0x${string}`,
+        {
           calls: [
-            // ERC-20 approve (both tokens)
             { target: USDC_ADDRESS, functionSignature: 'approve(address,uint256)' },
-            { target: USDT_ADDRESS, functionSignature: 'approve(address,uint256)' },
-            // Escrow contract functions
-            { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'createMatch(bytes32,bytes32,address,uint256,address,uint256,uint256,uint256)' },
-            { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'acceptMatch(bytes32)' },
-            { target: ESCROW_CONTRACT_ADDRESS, functionSignature: 'deposit(bytes32)' },
-            // BetSettler contract functions
-            ...(BET_SETTLER_CONTRACT_ADDRESS ? [
-              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'createBet(bytes32,uint256,address,uint256,uint256)' },
-              { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'placeBet(bytes32,uint8,uint256)' },
-            ] : []),
+            { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'placeBet(bytes32,uint8,uint256)' },
+            { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'claimWinnings(bytes32)' },
+            { target: BET_SETTLER_CONTRACT_ADDRESS, functionSignature: 'claimRefund(bytes32)' },
           ],
-          spends: [
-            {
-              token: USDC_ADDRESS,
-              allowance: '100000000', // 100 USDC (6 decimals)
-              unit: 'hour' as const,
-              multiplier: 1,
-            },
-            {
-              token: USDT_ADDRESS,
-              allowance: '100000000', // 100 USDT (6 decimals)
-              unit: 'hour' as const,
-              multiplier: 1,
-            },
-          ],
+          spends: [{
+            token: USDC_ADDRESS,
+            allowance: parseUnits(spendLimit, 6).toString(),
+            unit: 'hour',
+          }],
         },
-      });
+      );
 
-      // Store session on backend
-      const sessionRes = await api.createSession({
-        permissionId: result.permissionId,
-        expiresAt: expiry,
-      });
-
-      if (sessionRes.error) {
-        setError(sessionRes.error);
-        return false;
+      const permissionId = result.permissionId;
+      if (!permissionId) {
+        throw new Error('No permissionId returned from grant');
       }
 
-      setHasSession(true);
-      return true;
+      // 3. Store in backend
+      const sessionRes = await api.createSession({
+        permissionId,
+        expiresAt: expirySeconds,
+      });
+      if (sessionRes.error) {
+        throw new Error(sessionRes.error);
+      }
+
+      const expiresAt = new Date(expirySeconds * 1000);
+      setState((s) => ({
+        ...s,
+        hasSession: true,
+        isGranting: false,
+        expiresAt,
+      }));
     } catch (err: any) {
-      setError(err.message || 'Failed to grant session');
-      return false;
+      if (err?.code === 4001) {
+        // User rejected — not an error
+        setState((s) => ({ ...s, isGranting: false }));
+        return;
+      }
+      setState((s) => ({
+        ...s,
+        isGranting: false,
+        error: err.message || 'Failed to grant session',
+      }));
     }
-  }, [spenderAddress, grantPermission, api]);
+  }, [account, api]);
 
   const revokeSession = useCallback(async () => {
-    await api.revokeSession();
-    setHasSession(false);
+    setState((s) => ({ ...s, isRevoking: true, error: null }));
+    try {
+      await api.revokeSession();
+      setState((s) => ({
+        ...s,
+        hasSession: false,
+        isRevoking: false,
+        expiresAt: null,
+      }));
+    } catch (err: any) {
+      setState((s) => ({
+        ...s,
+        isRevoking: false,
+        error: err.message || 'Failed to revoke session',
+      }));
+    }
   }, [api]);
 
   return {
-    hasSession,
-    isGranting,
-    spenderAddress,
-    error,
+    ...state,
     grantSession,
-    checkSession,
     revokeSession,
   };
 }

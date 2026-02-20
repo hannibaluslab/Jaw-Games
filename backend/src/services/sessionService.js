@@ -2,6 +2,7 @@ const { CHAIN_ID } = require('../config/blockchain');
 
 // Lazy-loaded ESM modules
 let _Account = null;
+let _JAW_PAYMASTER_URL = null;
 let _privateKeyToAccount = null;
 let _encodeFunctionData = null;
 let _parseUnits = null;
@@ -9,10 +10,10 @@ let _account = null;
 let _accountInitPromise = null; // Prevent concurrent init attempts
 
 const ESCROW_CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS;
+const BET_SETTLER_CONTRACT_ADDRESS = process.env.BET_SETTLER_CONTRACT_ADDRESS;
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
 const JAW_API_KEY = process.env.JAW_API_KEY;
 const SPENDER_PRIVATE_KEY = process.env.SPENDER_PRIVATE_KEY;
-const PAYMASTER_URL = `https://api.justaname.id/proxy/v1/rpc/erc20-paymaster?chainId=${CHAIN_ID}&api-key=${JAW_API_KEY}`;
 
 // Pre-computed spender smart account address (deterministic from SPENDER_PRIVATE_KEY)
 // EOA 0x566e9825EF7D3e3527f1811d7784779c3F07b1bE → JAW smart account via factory
@@ -30,6 +31,34 @@ const ERC20_ABI = [
     ],
     name: 'approve',
     outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+];
+
+const BET_SETTLER_ABI = [
+  {
+    inputs: [
+      { name: 'betId', type: 'bytes32' },
+      { name: 'outcome', type: 'uint8' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'placeBet',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'betId', type: 'bytes32' }],
+    name: 'claimWinnings',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'betId', type: 'bytes32' }],
+    name: 'claimRefund',
+    outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
   },
@@ -72,6 +101,7 @@ async function loadESM() {
   if (!_Account) {
     const jawCore = await import('@jaw.id/core');
     _Account = jawCore.Account;
+    _JAW_PAYMASTER_URL = jawCore.JAW_PAYMASTER_URL;
   }
   if (!_privateKeyToAccount) {
     const viemAccounts = await import('viem/accounts');
@@ -101,11 +131,12 @@ async function getSpenderAccount() {
     let lastError;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
+        const paymasterUrl = `${_JAW_PAYMASTER_URL}?chainId=${CHAIN_ID}&api-key=${JAW_API_KEY}`;
         const account = await _Account.fromLocalAccount(
           {
             chainId: CHAIN_ID,
             apiKey: JAW_API_KEY,
-            paymasterUrl: PAYMASTER_URL,
+            paymasterUrl,
             paymasterContext: { token: USDC_ADDRESS },
           },
           localAccount
@@ -191,8 +222,23 @@ class SessionService {
     ];
 
     try {
-      const result = await account.sendCalls(calls, { permissionId });
-      return result;
+      const { id } = await account.sendCalls(calls, { permissionId });
+
+      // Poll getCallStatus — sendCalls returns before tx is mined
+      let status;
+      for (let i = 0; i < 30; i++) {
+        status = await account.getCallStatus(id);
+        if (status.status !== 100) break; // 100 = Pending
+        await sleep(2000);
+      }
+
+      if (status?.status === 200) {
+        return { id, receipts: status.receipts };
+      } else if (status?.status === 400 || status?.status === 500) {
+        throw new Error(`Transaction failed with status ${status.status}`);
+      } else {
+        throw new Error('Transaction timed out waiting for confirmation');
+      }
     } catch (err) {
       console.error('Session executeCreateMatch failed:', err.message || err);
       if (err.message?.includes('500') || err.message?.includes('fetch')) {
@@ -246,10 +292,191 @@ class SessionService {
     ];
 
     try {
-      const result = await account.sendCalls(calls, { permissionId });
-      return result;
+      const { id } = await account.sendCalls(calls, { permissionId });
+
+      // Poll getCallStatus — sendCalls returns before tx is mined
+      let status;
+      for (let i = 0; i < 30; i++) {
+        status = await account.getCallStatus(id);
+        if (status.status !== 100) break; // 100 = Pending
+        await sleep(2000);
+      }
+
+      if (status?.status === 200) {
+        return { id, receipts: status.receipts };
+      } else if (status?.status === 400 || status?.status === 500) {
+        throw new Error(`Transaction failed with status ${status.status}`);
+      } else {
+        throw new Error('Transaction timed out waiting for confirmation');
+      }
     } catch (err) {
       console.error('Session executeAcceptMatch failed:', err.message || err);
+      if (err.message?.includes('500') || err.message?.includes('fetch')) {
+        const rpcError = new Error('JAW RPC temporarily unavailable. Please use wallet popup.');
+        rpcError.code = 'JAW_RPC_UNAVAILABLE';
+        throw rpcError;
+      }
+      throw err;
+    }
+  }
+  /**
+   * Execute placeBet on behalf of user via permission (approve + placeBet)
+   */
+  static async executePlaceBet(permissionId, { betId, outcome, amount, tokenAddress }) {
+    await loadESM();
+
+    let account;
+    try {
+      account = await getSpenderAccount();
+    } catch (err) {
+      if (err.code === 'JAW_RPC_UNAVAILABLE') throw err;
+      throw new Error('Session service initialization failed. Please use wallet popup.');
+    }
+
+    const calls = [
+      {
+        to: tokenAddress,
+        data: _encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [BET_SETTLER_CONTRACT_ADDRESS, BigInt(amount)],
+        }),
+      },
+      {
+        to: BET_SETTLER_CONTRACT_ADDRESS,
+        data: _encodeFunctionData({
+          abi: BET_SETTLER_ABI,
+          functionName: 'placeBet',
+          args: [betId, outcome, BigInt(amount)],
+        }),
+      },
+    ];
+
+    try {
+      const { id } = await account.sendCalls(calls, { permissionId });
+
+      let status;
+      for (let i = 0; i < 30; i++) {
+        status = await account.getCallStatus(id);
+        if (status.status !== 100) break;
+        await sleep(2000);
+      }
+
+      if (status?.status === 200) {
+        return { id, receipts: status.receipts };
+      } else if (status?.status === 400 || status?.status === 500) {
+        throw new Error(`Transaction failed with status ${status.status}`);
+      } else {
+        throw new Error('Transaction timed out waiting for confirmation');
+      }
+    } catch (err) {
+      console.error('Session executePlaceBet failed:', err.message || err);
+      if (err.message?.includes('500') || err.message?.includes('fetch')) {
+        const rpcError = new Error('JAW RPC temporarily unavailable. Please use wallet popup.');
+        rpcError.code = 'JAW_RPC_UNAVAILABLE';
+        throw rpcError;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Execute claimWinnings on behalf of user via permission
+   */
+  static async executeClaimWinnings(permissionId, { betId }) {
+    await loadESM();
+
+    let account;
+    try {
+      account = await getSpenderAccount();
+    } catch (err) {
+      if (err.code === 'JAW_RPC_UNAVAILABLE') throw err;
+      throw new Error('Session service initialization failed. Please use wallet popup.');
+    }
+
+    const calls = [
+      {
+        to: BET_SETTLER_CONTRACT_ADDRESS,
+        data: _encodeFunctionData({
+          abi: BET_SETTLER_ABI,
+          functionName: 'claimWinnings',
+          args: [betId],
+        }),
+      },
+    ];
+
+    try {
+      const { id } = await account.sendCalls(calls, { permissionId });
+
+      let status;
+      for (let i = 0; i < 30; i++) {
+        status = await account.getCallStatus(id);
+        if (status.status !== 100) break;
+        await sleep(2000);
+      }
+
+      if (status?.status === 200) {
+        return { id, receipts: status.receipts };
+      } else if (status?.status === 400 || status?.status === 500) {
+        throw new Error(`Transaction failed with status ${status.status}`);
+      } else {
+        throw new Error('Transaction timed out waiting for confirmation');
+      }
+    } catch (err) {
+      console.error('Session executeClaimWinnings failed:', err.message || err);
+      if (err.message?.includes('500') || err.message?.includes('fetch')) {
+        const rpcError = new Error('JAW RPC temporarily unavailable. Please use wallet popup.');
+        rpcError.code = 'JAW_RPC_UNAVAILABLE';
+        throw rpcError;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Execute claimRefund on behalf of user via permission
+   */
+  static async executeClaimRefund(permissionId, { betId }) {
+    await loadESM();
+
+    let account;
+    try {
+      account = await getSpenderAccount();
+    } catch (err) {
+      if (err.code === 'JAW_RPC_UNAVAILABLE') throw err;
+      throw new Error('Session service initialization failed. Please use wallet popup.');
+    }
+
+    const calls = [
+      {
+        to: BET_SETTLER_CONTRACT_ADDRESS,
+        data: _encodeFunctionData({
+          abi: BET_SETTLER_ABI,
+          functionName: 'claimRefund',
+          args: [betId],
+        }),
+      },
+    ];
+
+    try {
+      const { id } = await account.sendCalls(calls, { permissionId });
+
+      let status;
+      for (let i = 0; i < 30; i++) {
+        status = await account.getCallStatus(id);
+        if (status.status !== 100) break;
+        await sleep(2000);
+      }
+
+      if (status?.status === 200) {
+        return { id, receipts: status.receipts };
+      } else if (status?.status === 400 || status?.status === 500) {
+        throw new Error(`Transaction failed with status ${status.status}`);
+      } else {
+        throw new Error('Transaction timed out waiting for confirmation');
+      }
+    } catch (err) {
+      console.error('Session executeClaimRefund failed:', err.message || err);
       if (err.message?.includes('500') || err.message?.includes('fetch')) {
         const rpcError = new Error('JAW RPC temporarily unavailable. Please use wallet popup.');
         rpcError.code = 'JAW_RPC_UNAVAILABLE';

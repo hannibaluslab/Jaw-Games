@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useJawAccount } from '@/lib/contexts/AccountContext';
 import { useApi } from '@/lib/hooks/useApi';
 import { formatUnits } from 'viem';
 import { getTokenSymbol } from '@/lib/contracts';
@@ -12,13 +12,13 @@ type Tab = 'open' | 'my' | 'past';
 export default function BetsPage() {
   const router = useRouter();
   const api = useApi();
-  const { isConnected, status } = useAccount();
+  const { isConnected, isLoading } = useJawAccount();
   const [tab, setTab] = useState<Tab>('open');
   const [bets, setBets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (status === 'connecting' || status === 'reconnecting') return;
+    if (isLoading) return;
     if (!isConnected) {
       router.push('/');
       return;
@@ -28,7 +28,7 @@ export default function BetsPage() {
     if (userId) {
       api.setAuthToken(userId);
     }
-  }, [isConnected, status, router, api]);
+  }, [isConnected, isLoading, router, api]);
 
   useEffect(() => {
     let isFirst = true;

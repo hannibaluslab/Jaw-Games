@@ -11,15 +11,10 @@
   },
   "dependencies": {
     "@jaw.id/core": "^0.0.3",
-    "@jaw.id/ui": "^0.0.4",
-    "@jaw.id/wagmi": "^0.0.3",
-    "@tanstack/react-query": "^5.90.20",
-    "ethers": "^6.16.0",
     "next": "16.1.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "viem": "^2.45.0",
-    "wagmi": "^3.4.1"
+    "viem": "^2.45.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

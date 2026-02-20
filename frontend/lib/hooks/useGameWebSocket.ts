@@ -2,33 +2,26 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001/ws';
-
-export interface GameState {
-  board: (string | null)[];
-  currentTurn: 'X' | 'O';
-  playerX: string;
-  playerO: string;
-  winner: string | null;
-  moves: Array<{ player: string; cell: number; timestamp: number }>;
-}
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL!;
 
 export interface GameEndResult {
   result: 'winner' | 'draw';
   winner?: string;
   txHash?: string;
-  gameState: GameState;
+  gameState: any;
 }
 
 export function useGameWebSocket(matchId: string, userId: string) {
   const ws = useRef<WebSocket | null>(null);
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [gameState, setGameState] = useState<any>(null);
   const [gameEnd, setGameEnd] = useState<GameEndResult | null>(null);
   const [connected, setConnected] = useState(false);
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [drawFlash, setDrawFlash] = useState(false);
   const [settlementTxHash, setSettlementTxHash] = useState<string | null>(null);
+  const [validMoves, setValidMoves] = useState<any[]>([]);
+  const [noMoves, setNoMoves] = useState(false);
 
   useEffect(() => {
     if (!matchId || !userId) return;
@@ -61,6 +54,11 @@ export function useGameWebSocket(matchId: string, userId: string) {
           break;
         case 'game_update':
           setGameState(data.gameState);
+          if (data.validMoves) setValidMoves(data.validMoves);
+          if (data.noMoves) {
+            setNoMoves(true);
+            setTimeout(() => setNoMoves(false), 2000);
+          }
           break;
         case 'game_ended':
           setGameState(data.gameState);
@@ -72,7 +70,6 @@ export function useGameWebSocket(matchId: string, userId: string) {
           });
           break;
         case 'new_round':
-          // Draw — flash message then reset board
           setDrawFlash(true);
           setTimeout(() => {
             setGameState(data.gameState);
@@ -121,14 +118,18 @@ export function useGameWebSocket(matchId: string, userId: string) {
     };
   }, [matchId, userId]);
 
-  const sendMove = useCallback((cell: number) => {
+  const sendMove = useCallback((move: any) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
+      // Support legacy TicTacToe call: sendMove(cellIndex)
+      const payload = typeof move === 'number'
+        ? { matchId, userId, move: { cell: move } }
+        : { matchId, userId, move };
       ws.current.send(JSON.stringify({
         type: 'game_move',
-        payload: { matchId, userId, move: { cell } },
+        payload,
       }));
     }
   }, [matchId, userId]);
 
-  return { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash };
+  return { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash, validMoves, noMoves };
 }
