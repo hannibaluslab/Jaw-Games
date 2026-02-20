@@ -101,7 +101,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     Account.logout(JAW_API_KEY);
     setAccount(null);
-    localStorage.clear();
+    // Only clear app-specific data, NOT the SDK's stored accounts
+    // (localStorage.clear() would wipe credentialIds needed for sign-in)
+    localStorage.removeItem('userId');
   }, []);
 
   const address = account?.address ?? null;
