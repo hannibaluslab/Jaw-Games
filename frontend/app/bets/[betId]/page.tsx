@@ -2,7 +2,7 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useAccount, useSendCalls } from 'wagmi';
+import { useAccount, useSendCalls, usePublicClient } from 'wagmi';
 import { formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import {
@@ -48,6 +48,7 @@ export default function BetDetailPage() {
   const [saveLoading, setSaveLoading] = useState(false);
 
   const { sendCalls, isPending: isTxPending } = useSendCalls();
+  const publicClient = usePublicClient();
 
   const username = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
   const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
@@ -227,6 +228,28 @@ export default function BetDetailPage() {
         ],
       }, {
         onSuccess: async (result) => {
+          // Poll on-chain to verify the bet was placed
+          let confirmed = false;
+          for (let i = 0; i < 20; i++) {
+            try {
+              const bettorInfo = await publicClient!.readContract({
+                address: BET_SETTLER_CONTRACT_ADDRESS,
+                abi: BET_SETTLER_ABI,
+                functionName: 'bettors',
+                args: [betId as `0x${string}`, address as `0x${string}`],
+              }) as any;
+              if (bettorInfo.outcome && bettorInfo.outcome > 0) {
+                confirmed = true;
+                break;
+              }
+            } catch {}
+            await new Promise(r => setTimeout(r, 3000));
+          }
+          if (!confirmed) {
+            setError('Transaction was not confirmed on-chain. Please try again.');
+            setActionLoading(false);
+            return;
+          }
           await api.placeBet(betId, { outcome: outcomeIdx, amount: parsedAmount.toString(), txHash: result.id });
           setSelectedOutcome(null);
           setBetAmount('');

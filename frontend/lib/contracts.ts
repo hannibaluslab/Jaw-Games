@@ -177,6 +177,20 @@ export const BET_SETTLER_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [
+      { name: 'betId', type: 'bytes32' },
+      { name: 'bettor', type: 'address' },
+    ],
+    name: 'bettors',
+    outputs: [
+      { name: 'outcome', type: 'uint8' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'claimed', type: 'bool' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 export const ERC20_ABI = [

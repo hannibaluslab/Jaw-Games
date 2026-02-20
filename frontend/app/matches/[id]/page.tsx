@@ -2,7 +2,7 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useSendCalls } from 'wagmi';
+import { useAccount, useSendCalls, usePublicClient } from 'wagmi';
 import { formatUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
@@ -24,8 +24,10 @@ export default function MatchDetailsPage() {
   const [action, setAction] = useState<Action>('idle');
 
   const { sendCalls, isPending: isTxPending } = useSendCalls();
+  const publicClient = usePublicClient();
 
   const currentUsername = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
+  const [onChainVerified, setOnChainVerified] = useState<boolean | null>(null);
 
   const fetchMatch = useCallback(async () => {
     const response = await api.getMatch(matchId);
@@ -44,6 +46,19 @@ export default function MatchDetailsPage() {
     const interval = setInterval(fetchMatch, 5000);
     return () => clearInterval(interval);
   }, [fetchMatch, checkSession]);
+
+  // Verify match exists on-chain before allowing interactions
+  useEffect(() => {
+    if (!match || !publicClient || match.status !== 'created') return;
+    publicClient.readContract({
+      address: ESCROW_CONTRACT_ADDRESS,
+      abi: ESCROW_ABI,
+      functionName: 'matches',
+      args: [matchId as `0x${string}`],
+    }).then((result: any) => {
+      setOnChainVerified(result.playerA !== '0x0000000000000000000000000000000000000000');
+    }).catch(() => setOnChainVerified(false));
+  }, [match, publicClient, matchId]);
 
   const isPlayerA = match && currentUsername === match.player_a_username;
   const isPlayerB = match && currentUsername === match.player_b_username;
@@ -322,17 +337,26 @@ export default function MatchDetailsPage() {
           </div>
         )}
 
+        {/* On-chain warning */}
+        {match.status === 'created' && onChainVerified === false && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded mb-4 text-sm">
+            This match is still being confirmed on-chain. Please wait a moment and refresh, or ask the creator to recreate it.
+          </div>
+        )}
+
         {/* Action Buttons */}
         {/* Player B: single button to accept + approve + deposit */}
         {match.status === 'created' && isPlayerB && (
           <button
             onClick={handleAcceptAndDeposit}
-            disabled={isProcessing}
+            disabled={isProcessing || onChainVerified === false}
             className="w-full bg-blue-600 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 text-base sm:text-lg"
           >
             {action === 'accepting'
               ? (hasSession ? 'Accepting match...' : 'Confirm in wallet...')
-              : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
+              : onChainVerified === false
+                ? 'Waiting for on-chain confirmation...'
+                : `Accept & Deposit ${stakeDisplay} ${tokenSymbol}`}
           </button>
         )}
 

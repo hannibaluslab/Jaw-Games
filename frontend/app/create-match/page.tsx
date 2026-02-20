@@ -2,13 +2,13 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { useAccount, useSendCalls } from 'wagmi';
+import { useAccount, useSendCalls, usePublicClient } from 'wagmi';
 import { keccak256, toHex, parseUnits, encodeFunctionData } from 'viem';
 import { useApi } from '@/lib/hooks/useApi';
 import { useSessionPermission } from '@/lib/hooks/useSessionPermission';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, TOKENS, PLATFORM_FEE, WINNER_SHARE, MIN_STAKE, ENS_DOMAIN } from '@/lib/contracts';
 
-type Step = 'form' | 'signing' | 'saving' | 'done';
+type Step = 'form' | 'signing' | 'confirming' | 'saving' | 'done';
 
 function CreateMatchContent() {
   const router = useRouter();
@@ -26,6 +26,7 @@ function CreateMatchContent() {
   const [players, setPlayers] = useState<{ username: string; smartAccountAddress: string }[]>([]);
 
   const { sendCalls, isPending: isTxPending } = useSendCalls();
+  const publicClient = usePublicClient();
 
   // Load players list + check session
   useEffect(() => {
@@ -135,6 +136,29 @@ function CreateMatchContent() {
       ],
     }, {
       onSuccess: async (result) => {
+        setStep('confirming');
+        // Poll on-chain to verify the match was actually created
+        let confirmed = false;
+        for (let i = 0; i < 20; i++) {
+          try {
+            const onChain = await publicClient!.readContract({
+              address: ESCROW_CONTRACT_ADDRESS,
+              abi: ESCROW_ABI,
+              functionName: 'matches',
+              args: [matchId as `0x${string}`],
+            }) as any;
+            if (onChain.playerA && onChain.playerA !== '0x0000000000000000000000000000000000000000') {
+              confirmed = true;
+              break;
+            }
+          } catch {}
+          await new Promise(r => setTimeout(r, 3000));
+        }
+        if (!confirmed) {
+          setError('Transaction was not confirmed on-chain. Please try again.');
+          setStep('form');
+          return;
+        }
         setStep('saving');
         const response = await api.createMatch({
           gameId: 'tictactoe',
@@ -163,6 +187,7 @@ function CreateMatchContent() {
   const getStepMessage = () => {
     switch (step) {
       case 'signing': return isTxPending ? 'Confirm in your wallet...' : 'Sending transaction...';
+      case 'confirming': return 'Confirming transaction on-chain...';
       case 'saving': return hasSession ? 'Creating match...' : 'Saving match...';
       case 'done': return 'Match created! Redirecting...';
       default: return '';
