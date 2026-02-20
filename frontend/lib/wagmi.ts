@@ -1,9 +1,9 @@
 import { createConfig, http } from 'wagmi';
 import { baseSepolia } from 'wagmi/chains';
 import { jaw } from '@jaw.id/wagmi';
-import { USDC_ADDRESS } from './contracts';
 
 const JAW_API_KEY = process.env.NEXT_PUBLIC_JAW_API_KEY!;
+const PIMLICO_API_KEY = process.env.NEXT_PUBLIC_PIMLICO_API_KEY!;
 
 export const config = createConfig({
   chains: [baseSepolia],
@@ -19,8 +19,7 @@ export const config = createConfig({
       },
       paymasters: {
         [baseSepolia.id]: {
-          url: `https://api.justaname.id/proxy/v1/rpc/erc20-paymaster?chainId=${baseSepolia.id}&api-key=${JAW_API_KEY}`,
-          context: { token: USDC_ADDRESS },
+          url: `https://api.pimlico.io/v2/${baseSepolia.id}/rpc?apikey=${PIMLICO_API_KEY}`,
         },
       },
     }),
