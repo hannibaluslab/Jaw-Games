@@ -17,11 +17,11 @@ export const config = createConfig({
       preference: {
         showTestnets: true,
       },
-      paymasters: {
-        [baseSepolia.id]: {
-          url: `https://api.pimlico.io/v2/${baseSepolia.id}/rpc?apikey=${PIMLICO_API_KEY}`,
-        },
-      },
+      // paymasters: {
+      //   [baseSepolia.id]: {
+      //     url: `https://api.pimlico.io/v2/${baseSepolia.id}/rpc?apikey=${PIMLICO_API_KEY}`,
+      //   },
+      // },
     }),
   ],
   transports: {
