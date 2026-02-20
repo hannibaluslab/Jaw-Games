@@ -162,12 +162,12 @@ export default function Home() {
 
         {/* Passkey educational screen */}
         {mode === 'passkey-modal' && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 sm:p-8 shadow-2xl border border-white/20 flex flex-col max-h-[80dvh]">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-2xl flex flex-col">
             {/* Centered fingerprint icon + title */}
-            <div className="flex flex-col items-center mb-5 shrink-0">
-              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mb-4">
+            <div className="flex flex-col items-center mb-6 shrink-0">
+              <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mb-4">
                 <svg
-                  className="w-7 h-7 text-white"
+                  className="w-7 h-7 text-blue-600"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -186,25 +186,25 @@ export default function Home() {
                   <path d="M9 6.8a6 6 0 0 1 9 5.2v2" />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-white">No Password. Just You.</h2>
+              <h2 className="text-2xl font-bold text-gray-900">No Password. Just You.</h2>
             </div>
 
             {/* Scrollable body text */}
-            <div className="overflow-y-auto flex-1 min-h-0 space-y-4 text-left text-sm leading-relaxed text-white/75 px-1">
+            <div className="overflow-y-auto flex-1 min-h-0 space-y-4 text-left text-sm leading-relaxed text-gray-600 px-1">
               <p>
                 Your JAW Games account is secured by a{' '}
-                <span className="font-semibold text-white">passkey</span>, activated only by your{' '}
-                <span className="font-semibold text-white">face or fingerprint</span>. No passwords
+                <span className="font-semibold text-gray-800">passkey</span>, activated only by your{' '}
+                <span className="font-semibold text-gray-800">face or fingerprint</span>. No passwords
                 to remember, no seed phrases to lose.
               </p>
               <p>
                 It{' '}
-                <span className="font-semibold text-white">syncs automatically</span> across your
+                <span className="font-semibold text-gray-800">syncs automatically</span> across your
                 devices through iCloud Keychain or Google Password Manager. Sign in from anywhere,
                 instantly.
               </p>
               <p>
-                <span className="font-semibold text-white">
+                <span className="font-semibold text-gray-800">
                   No one can sign in without your biometrics.
                 </span>{' '}
                 Even if someone got access to your device or your cloud account, they&apos;d still
@@ -213,16 +213,16 @@ export default function Home() {
             </div>
 
             {/* Fixed CTA area */}
-            <div className="mt-5 space-y-3 shrink-0">
+            <div className="mt-6 space-y-3 shrink-0">
               <button
                 onClick={handleCreateAccount}
                 disabled={isPending}
-                className="w-full bg-white text-blue-600 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {isPending ? (
                   <span className="flex items-center">
                     <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600"
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -240,7 +240,7 @@ export default function Home() {
                 href="https://docs.jaw.id"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full text-center text-white/70 hover:text-white py-2 text-sm font-medium"
+                className="block w-full text-center text-blue-600 hover:text-blue-700 py-2 text-sm font-medium"
               >
                 Learn how passkeys work
               </a>
