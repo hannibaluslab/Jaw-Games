@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { BackgammonGameState, BackgammonSubmove, BackgammonValidMove } from './BackgammonTypes';
+import { useGameSounds } from '@/lib/hooks/useGameSounds';
 
 interface BackgammonBoardProps {
   gameState: BackgammonGameState;
@@ -37,6 +38,63 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
     if (typeof window === 'undefined') return false;
     return window.innerHeight > window.innerWidth;
   });
+
+  // Sound effects
+  const { playSound } = useGameSounds();
+  const prevDiceRef = useRef<number[] | null>(null);
+  const prevBarRef = useRef<{ player1: number; player2: number } | null>(null);
+  const prevBoardRef = useRef<number[] | null>(null);
+  const isFirstRender = useRef(true);
+
+  // Detect game events and play sounds
+  useEffect(() => {
+    // Skip the very first render (initial state load)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      prevDiceRef.current = gameState.dice || null;
+      prevBarRef.current = gameState.bar ? { ...gameState.bar } : null;
+      prevBoardRef.current = gameState.board ? [...gameState.board] : null;
+      return;
+    }
+
+    // 1. Dice roll detection
+    const prevDice = prevDiceRef.current;
+    const currDice = gameState.dice;
+    if (currDice && currDice.length > 0) {
+      const diceChanged = !prevDice || prevDice[0] !== currDice[0] || prevDice[1] !== currDice[1];
+      if (diceChanged) {
+        playSound('dice');
+        // Check for double 6
+        if (currDice[0] === 6 && currDice[1] === 6) {
+          setTimeout(() => playSound('double'), 350);
+        }
+      }
+    }
+    prevDiceRef.current = currDice || null;
+
+    // 2. Hit detection (bar increased)
+    const prevBar = prevBarRef.current;
+    const currBar = gameState.bar;
+    let wasHit = false;
+    if (currBar && prevBar) {
+      if (currBar.player1 > prevBar.player1 || currBar.player2 > prevBar.player2) {
+        playSound('hit');
+        wasHit = true;
+      }
+    }
+    prevBarRef.current = currBar ? { ...currBar } : null;
+
+    // 3. Move detection (board changed, no hit)
+    const prevBoard = prevBoardRef.current;
+    const currBoard = gameState.board;
+    if (!wasHit && currBoard && prevBoard) {
+      const boardChanged = currBoard.some((v: number, i: number) => v !== prevBoard[i]);
+      if (boardChanged) {
+        playSound('move');
+      }
+    }
+    prevBoardRef.current = currBoard ? [...currBoard] : null;
+  }, [gameState, playSound]);
 
   if (!gameState?.board || !gameState?.bar || !gameState?.borneOff) {
     return (
