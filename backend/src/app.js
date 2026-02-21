@@ -27,7 +27,14 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: 'v2-lifebet', timestamp: new Date().toISOString() });
+  let engines = [];
+  try {
+    const { getGameEngine } = require('./games/index');
+    ['tictactoe', 'backgammon', 'slimesoccer'].forEach(g => {
+      try { getGameEngine(g); engines.push(g); } catch {}
+    });
+  } catch {}
+  res.json({ status: 'ok', version: 'v3-slimesoccer', timestamp: new Date().toISOString(), engines });
 });
 
 // API routes
