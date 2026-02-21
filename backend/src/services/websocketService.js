@@ -152,6 +152,9 @@ class WebSocketService {
   async handleLeaveMatch(ws, payload) {
     const { matchId, userId } = payload;
 
+    // If a newer connection has replaced this one, ignore the stale leave
+    if (this.clients.get(userId) !== ws) return;
+
     if (this.matchRooms.has(matchId)) {
       this.matchRooms.get(matchId).delete(userId);
     }
@@ -381,18 +384,21 @@ class WebSocketService {
 
   handleDisconnect(ws) {
     const userId = ws.userId;
-    if (userId) {
-      this.clients.delete(userId);
+    if (!userId) return;
 
-      // Remove from all match rooms
-      for (const [matchId, users] of this.matchRooms.entries()) {
-        if (users.has(userId)) {
-          users.delete(userId);
-          this.broadcastToMatch(matchId, userId, {
-            type: 'player_disconnected',
-            userId,
-          });
-        }
+    // If a newer connection has replaced this one, don't clean up
+    if (this.clients.get(userId) !== ws) return;
+
+    this.clients.delete(userId);
+
+    // Remove from all match rooms
+    for (const [matchId, users] of this.matchRooms.entries()) {
+      if (users.has(userId)) {
+        users.delete(userId);
+        this.broadcastToMatch(matchId, userId, {
+          type: 'player_disconnected',
+          userId,
+        });
       }
     }
   }

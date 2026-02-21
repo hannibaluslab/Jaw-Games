@@ -59,7 +59,7 @@ export default function PlayGamePage() {
     });
   }, [api, matchId]);
 
-  if (!userId) {
+  if (!userId || !matchData) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -67,12 +67,12 @@ export default function PlayGamePage() {
     );
   }
 
-  const gameId = matchData?.game_id || 'tictactoe';
+  const gameId = matchData.game_id || 'tictactoe';
 
   // Slime soccer has its own WebSocket hook — render directly
   if (gameId === 'slimesoccer') {
-    const stakeNum = matchData ? Number(formatUnits(BigInt(matchData.stake_amount), 6)) : 0;
-    const tokenSymbol = matchData ? getTokenSymbol(matchData.token_address) : 'USDC';
+    const stakeNum = Number(formatUnits(BigInt(matchData.stake_amount), 6));
+    const tokenSymbol = getTokenSymbol(matchData.token_address);
     return <SlimeSoccerGameWrapper matchId={matchId} userId={userId} stakeAmount={stakeNum} tokenSymbol={tokenSymbol} />;
   }
 
