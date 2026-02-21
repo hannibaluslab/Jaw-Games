@@ -21,7 +21,6 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   const [selectedFrom, setSelectedFrom] = useState<number | 'bar' | null>(null);
   const [pendingSubmoves, setPendingSubmoves] = useState<BackgammonSubmove[]>([]);
   const [localState, setLocalState] = useState<BackgammonGameState>(gameState);
-  const [isLandscape, setIsLandscape] = useState(true);
 
   // Defensive: ensure nested objects exist
   if (!gameState?.board || !gameState?.bar || !gameState?.borneOff) {
@@ -37,14 +36,6 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   const isMyTurn = gameState.currentTurn === myPlayerKey && !gameState.winner;
   const mySign = myPlayerKey === 'player1' ? 1 : -1;
 
-  // Check orientation
-  useEffect(() => {
-    const check = () => setIsLandscape(window.innerWidth > window.innerHeight);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
-
   // Sync local state with server state
   useEffect(() => {
     setLocalState(gameState);
@@ -55,7 +46,6 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   // Compute valid destinations for selected checker
   const getValidDestinations = useCallback((): (number | 'off')[] => {
     if (selectedFrom === null || !isMyTurn) return [];
-    // Use remaining dice from local state after pending submoves
     return validMoves
       .filter(m => m.from === selectedFrom)
       .map(m => m.to);
@@ -78,19 +68,14 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   // Select a checker to move
   const handleSelectChecker = (pointIndex: number | 'bar') => {
     if (!isMyTurn || gameState.phase !== 'moving') return;
-
-    // Check if this source has valid moves
     const hasValid = validMoves.some(m => m.from === pointIndex);
     if (!hasValid) return;
-
     setSelectedFrom(pointIndex === selectedFrom ? null : pointIndex);
   };
 
   // Move to destination
   const handleSelectDestination = (toIndex: number | 'off') => {
     if (selectedFrom === null) return;
-
-    // Find matching valid move to get dieUsed
     const match = validMoves.find(m => m.from === selectedFrom && m.to === toIndex);
     if (!match) return;
 
@@ -103,9 +88,6 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
     const newSubmoves = [...pendingSubmoves, submove];
     setPendingSubmoves(newSubmoves);
     setSelectedFrom(null);
-
-    // Auto-submit the batch (server validates and handles turn switching)
-    // We send after each submove so the server can update valid moves
     sendMove({ submoves: newSubmoves });
     setPendingSubmoves([]);
   };
@@ -127,9 +109,6 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
     const isValidDest = destinations.includes(pointIndex);
     const hasMyChecker = mySign > 0 ? count > 0 : count < 0;
     const canSelect = isMyTurn && gameState.phase === 'moving' && hasMyChecker && validMoves.some(m => m.from === pointIndex);
-
-    // Point number for display
-    const pointNum = pointIndex + 1;
 
     return (
       <div
@@ -173,7 +152,7 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
             border: '2px solid #22c55e',
             borderRadius: 4,
             zIndex: 5,
-            animation: 'pulse 1s infinite',
+            animation: 'bgPulse 1s infinite',
           }} />
         )}
 
@@ -191,8 +170,8 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
             <div
               key={i}
               style={{
-                width: 'clamp(18px, 3.5vw, 32px)',
-                height: 'clamp(18px, 3.5vw, 32px)',
+                width: 'clamp(20px, 6vw, 32px)',
+                height: 'clamp(20px, 6vw, 32px)',
                 borderRadius: '50%',
                 background: color,
                 border: isSelected && i === Math.min(absCount, 5) - 1
@@ -204,7 +183,7 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 8,
+                fontSize: 9,
                 fontWeight: 'bold',
                 color: isP1 ? '#000' : '#fff',
               }}
@@ -213,23 +192,12 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
             </div>
           ))}
         </div>
-
-        {/* Point number */}
-        <div style={{
-          position: 'absolute',
-          [isTop ? 'bottom' : 'top']: -14,
-          fontSize: 8,
-          color: '#9ca3af',
-          zIndex: 3,
-        }}>
-          {pointNum}
-        </div>
       </div>
     );
   };
 
-  // Render bar
-  const renderBar = () => {
+  // Render bar (horizontal, between top and bottom halves)
+  const renderBarHorizontal = () => {
     const myBar = localState.bar?.[myPlayerKey] ?? 0;
     const oppBar = localState.bar?.[opponentKey] ?? 0;
     const isBarSelected = selectedFrom === 'bar';
@@ -237,28 +205,27 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
 
     return (
       <div style={{
-        width: 'clamp(30px, 5vw, 50px)',
+        height: 36,
         background: '#2d1810',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: 16,
         flexShrink: 0,
       }}>
         {/* Opponent's bar checkers */}
         {oppBar > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{
-              width: 'clamp(16px, 3vw, 28px)',
-              height: 'clamp(16px, 3vw, 28px)',
+              width: 24,
+              height: 24,
               borderRadius: '50%',
               background: myPlayerKey === 'player1' ? P2_COLOR : P1_COLOR,
               border: '2px solid rgba(0,0,0,0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 'bold',
               color: myPlayerKey === 'player1' ? '#fff' : '#000',
             }}>
@@ -267,23 +234,17 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
           </div>
         )}
 
-        <div style={{ fontSize: 7, color: '#666', textTransform: 'uppercase' }}>Bar</div>
+        <div style={{ fontSize: 9, color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>BAR</div>
 
         {/* My bar checkers */}
         {myBar > 0 && (
           <div
             onClick={() => canSelectBar && handleSelectChecker('bar')}
-            style={{
-              cursor: canSelectBar ? 'pointer' : 'default',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 2,
-            }}
+            style={{ cursor: canSelectBar ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 4 }}
           >
             <div style={{
-              width: 'clamp(16px, 3vw, 28px)',
-              height: 'clamp(16px, 3vw, 28px)',
+              width: 24,
+              height: 24,
               borderRadius: '50%',
               background: myPlayerKey === 'player1' ? P1_COLOR : P2_COLOR,
               border: isBarSelected ? '3px solid #fff' : '2px solid rgba(0,0,0,0.3)',
@@ -291,7 +252,7 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 'bold',
               color: myPlayerKey === 'player1' ? '#000' : '#fff',
             }}>
@@ -303,8 +264,8 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
     );
   };
 
-  // Render borne off area
-  const renderBorneOff = (playerKey: 'player1' | 'player2') => {
+  // Render borne off area (compact, horizontal)
+  const renderBorneOff = (playerKey: 'player1' | 'player2', label: string) => {
     const count = localState.borneOff?.[playerKey] ?? 0;
     const color = playerKey === 'player1' ? P1_COLOR : P2_COLOR;
     const isValidDest = destinations.includes('off') && playerKey === myPlayerKey;
@@ -313,23 +274,20 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
       <div
         onClick={() => isValidDest && handleSelectDestination('off')}
         style={{
-          width: 'clamp(30px, 5vw, 50px)',
-          background: '#1a1a2e',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: 2,
-          flexShrink: 0,
+          gap: 6,
+          padding: '2px 8px',
           cursor: isValidDest ? 'pointer' : 'default',
           border: isValidDest ? '2px solid #22c55e' : '2px solid transparent',
-          borderRadius: 4,
+          borderRadius: 6,
+          background: isValidDest ? 'rgba(34,197,94,0.1)' : 'transparent',
         }}
       >
-        <div style={{ fontSize: 7, color: '#9ca3af', textTransform: 'uppercase' }}>Off</div>
+        <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase' }}>{label}</div>
         <div style={{
-          width: 'clamp(16px, 3vw, 28px)',
-          height: 'clamp(16px, 3vw, 28px)',
+          width: 20,
+          height: 20,
           borderRadius: '50%',
           background: count > 0 ? color : 'transparent',
           border: count > 0 ? '2px solid rgba(0,0,0,0.3)' : '2px dashed #444',
@@ -349,32 +307,32 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   // Render dice
   const renderDice = () => {
     if (!gameState.dice || gameState.dice.length === 0) return null;
-
-    // Track which remaining dice we've accounted for
     const remainingCopy = [...(localState.remainingDice || [])];
 
+    const allDice = gameState.dice[0] === gameState.dice[1]
+      ? [gameState.dice[0], gameState.dice[0], gameState.dice[0], gameState.dice[0]]
+      : [...gameState.dice];
+
     return (
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {gameState.dice.map((die: number, i: number) => {
-          // For doubles (4 dice), show all 4
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {allDice.map((die: number, i: number) => {
           const isUsed = !remainingCopy.includes(die);
           if (!isUsed) {
             const idx = remainingCopy.indexOf(die);
             if (idx !== -1) remainingCopy.splice(idx, 1);
           }
-
           return (
             <div
               key={i}
               style={{
-                width: 36,
-                height: 36,
+                width: 32,
+                height: 32,
                 background: isUsed ? '#374151' : '#fff',
                 borderRadius: 6,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: 'bold',
                 color: isUsed ? '#6b7280' : '#111',
                 opacity: isUsed ? 0.4 : 1,
@@ -385,98 +343,21 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
             </div>
           );
         })}
-        {/* Show extra dice for doubles */}
-        {gameState.dice[0] === gameState.dice[1] && (
-          <>
-            {[2, 3].map(i => {
-              const isUsed = !remainingCopy.includes(gameState.dice[0]);
-              if (!isUsed) {
-                const idx = remainingCopy.indexOf(gameState.dice[0]);
-                if (idx !== -1) remainingCopy.splice(idx, 1);
-              }
-              return (
-                <div
-                  key={i}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    background: isUsed ? '#374151' : '#fff',
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    color: isUsed ? '#6b7280' : '#111',
-                    opacity: isUsed ? 0.4 : 1,
-                    border: '2px solid #555',
-                  }}
-                >
-                  {gameState.dice[0]}
-                </div>
-              );
-            })}
-          </>
-        )}
       </div>
     );
   };
 
-  // Portrait orientation prompt
-  if (!isLandscape) {
-    return (
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        background: '#111827',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-        zIndex: 100,
-        padding: 24,
-        textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📱</div>
-        <div style={{
-          fontSize: 48,
-          marginBottom: 24,
-          animation: 'rotate90 2s ease-in-out infinite',
-        }}>
-          ↻
-        </div>
-        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Rotate Your Device</h2>
-        <p style={{ color: '#9ca3af', fontSize: 14 }}>Backgammon plays best in landscape mode</p>
-        <style>{`
-          @keyframes rotate90 {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(90deg); }
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  // The board layout: top row (points 13-24 for p1 perspective), bottom row (points 1-12)
-  // We orient so the current user's home board is bottom-right
+  // Board point layout — portrait: 12 points across top half, 12 across bottom
   const isPlayer1 = myPlayerKey === 'player1';
 
-  // Top row: points displayed depend on player perspective
-  // Player1: top = points 13-24 (indices 12-23), bottom = points 1-12 (indices 0-11)
-  // Player2: top = points 12-1 (indices 11-0), bottom = points 24-13 (indices 23-12)
-  const topLeftPoints = isPlayer1
-    ? [12, 13, 14, 15, 16, 17]   // points 13-18
-    : [11, 10, 9, 8, 7, 6];      // points 12-7
-  const topRightPoints = isPlayer1
-    ? [18, 19, 20, 21, 22, 23]   // points 19-24
-    : [5, 4, 3, 2, 1, 0];        // points 6-1
-  const bottomLeftPoints = isPlayer1
-    ? [11, 10, 9, 8, 7, 6]       // points 12-7
-    : [12, 13, 14, 15, 16, 17];  // points 13-18
-  const bottomRightPoints = isPlayer1
-    ? [5, 4, 3, 2, 1, 0]         // points 6-1 (home)
-    : [18, 19, 20, 21, 22, 23];  // points 19-24 (home)
+  // Top half: opponent's outer + home, Bottom half: my outer + home
+  // Points flow: top-left to top-right, then bottom-right to bottom-left
+  const topPoints = isPlayer1
+    ? [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]  // points 13-24
+    : [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];           // points 12-1
+  const bottomPoints = isPlayer1
+    ? [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]             // points 12-1
+    : [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];  // points 13-24
 
   return (
     <div style={{
@@ -506,47 +387,54 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
         </div>
       )}
 
+      {/* Borne off row */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '4px 8px',
+        flexShrink: 0,
+      }}>
+        {renderBorneOff(opponentKey, 'Opp off')}
+        {/* Turn info */}
+        <div style={{
+          color: isMyTurn ? '#22c55e' : '#9ca3af',
+          fontSize: 13,
+          fontWeight: 'bold',
+          textAlign: 'center',
+        }}>
+          {gameState.winner
+            ? (gameState[gameState.winner] === userId ? 'You Won!' : 'You Lost')
+            : isMyTurn
+              ? (gameState.phase === 'rolling' ? 'Roll the dice' : 'Your move')
+              : "Opponent's turn"}
+        </div>
+        {renderBorneOff(myPlayerKey, 'My off')}
+      </div>
+
       {/* Board */}
       <div style={{
         flex: 1,
         display: 'flex',
-        margin: '4px 8px',
+        flexDirection: 'column',
+        margin: '0 4px',
         borderRadius: 8,
         overflow: 'hidden',
         border: '3px solid #5a3a1a',
+        minHeight: 0,
       }}>
-        {/* Left borne off */}
-        {renderBorneOff(opponentKey)}
-
-        {/* Left half of board */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BOARD_BG }}>
-          {/* Top row left */}
-          <div style={{ flex: 1, display: 'flex', padding: '0 2px', overflow: 'hidden' }}>
-            {topLeftPoints.map(i => renderPoint(i, true))}
-          </div>
-          {/* Bottom row left */}
-          <div style={{ flex: 1, display: 'flex', padding: '0 2px', overflow: 'hidden' }}>
-            {bottomLeftPoints.map(i => renderPoint(i, false))}
-          </div>
+        {/* Top half — 12 points, triangles pointing down */}
+        <div style={{ flex: 1, display: 'flex', background: BOARD_BG, padding: '0 2px', overflow: 'hidden' }}>
+          {topPoints.map(i => renderPoint(i, true))}
         </div>
 
-        {/* Bar */}
-        {renderBar()}
+        {/* Bar — horizontal strip */}
+        {renderBarHorizontal()}
 
-        {/* Right half of board */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BOARD_BG }}>
-          {/* Top row right */}
-          <div style={{ flex: 1, display: 'flex', padding: '0 2px', overflow: 'hidden' }}>
-            {topRightPoints.map(i => renderPoint(i, true))}
-          </div>
-          {/* Bottom row right */}
-          <div style={{ flex: 1, display: 'flex', padding: '0 2px', overflow: 'hidden' }}>
-            {bottomRightPoints.map(i => renderPoint(i, false))}
-          </div>
+        {/* Bottom half — 12 points, triangles pointing up */}
+        <div style={{ flex: 1, display: 'flex', background: BOARD_BG, padding: '0 2px', overflow: 'hidden' }}>
+          {bottomPoints.map(i => renderPoint(i, false))}
         </div>
-
-        {/* Right borne off */}
-        {renderBorneOff(myPlayerKey)}
       </div>
 
       {/* Controls bar */}
@@ -554,10 +442,11 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 12,
-        padding: '6px 16px',
+        gap: 10,
+        padding: '8px 12px',
         background: '#1f2937',
         flexShrink: 0,
+        flexWrap: 'wrap',
       }}>
         {/* Dice display */}
         {gameState.phase === 'moving' && renderDice()}
@@ -571,13 +460,13 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
               color: '#fff',
               border: 'none',
               borderRadius: 8,
-              padding: '8px 20px',
-              fontSize: 14,
+              padding: '10px 24px',
+              fontSize: 15,
               fontWeight: 'bold',
               cursor: 'pointer',
             }}
           >
-            🎲 Roll Dice
+            Roll Dice
           </button>
         )}
 
@@ -590,28 +479,15 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
               color: '#fff',
               border: 'none',
               borderRadius: 8,
-              padding: '8px 20px',
-              fontSize: 14,
+              padding: '10px 24px',
+              fontSize: 15,
               fontWeight: 'bold',
               cursor: 'pointer',
             }}
           >
-            🎲 Roll for First Turn
+            Roll for First Turn
           </button>
         )}
-
-        {/* Turn info */}
-        <div style={{
-          color: isMyTurn ? '#22c55e' : '#9ca3af',
-          fontSize: 13,
-          fontWeight: 'bold',
-        }}>
-          {gameState.winner
-            ? (gameState[gameState.winner] === userId ? '🏆 You Won!' : '💀 You Lost')
-            : isMyTurn
-              ? (gameState.phase === 'rolling' ? 'Roll the dice' : 'Your move')
-              : "Opponent's turn"}
-        </div>
 
         {/* Undo button */}
         {pendingSubmoves.length > 0 && (
@@ -622,19 +498,19 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
               color: '#fff',
               border: 'none',
               borderRadius: 8,
-              padding: '6px 12px',
-              fontSize: 12,
+              padding: '8px 14px',
+              fontSize: 13,
               cursor: 'pointer',
             }}
           >
-            ↩ Undo
+            Undo
           </button>
         )}
       </div>
 
       {/* CSS animations */}
       <style>{`
-        @keyframes pulse {
+        @keyframes bgPulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
