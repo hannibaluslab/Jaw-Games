@@ -6,6 +6,7 @@ import { formatUnits } from 'viem';
 import dynamic from 'next/dynamic';
 import { useGameWebSocket } from '@/lib/hooks/useGameWebSocket';
 import { useApi } from '@/lib/hooks/useApi';
+import { useGameSounds } from '@/lib/hooks/useGameSounds';
 import { BLOCK_EXPLORER_URL, PLATFORM_FEE, WINNER_SHARE, getTokenSymbol } from '@/lib/contracts';
 import TicTacToeBoard from './components/TicTacToeBoard';
 
@@ -53,6 +54,7 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
   const api = useApi();
   const { gameState, gameEnd, connected, opponentConnected, sendMove, error, drawFlash, settlementTxHash, validMoves, noMoves } = useGameWebSocket(matchId, userId);
 
+  const { playSound } = useGameSounds();
   const [matchData, setMatchData] = useState<any>(null);
   const [showOverlay, setShowOverlay] = useState(false);
 
@@ -65,13 +67,18 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
     });
   }, [api, matchId]);
 
-  // Animate overlay in when game ends
+  // Animate overlay in when game ends + play win/loss sound
   useEffect(() => {
     if (gameEnd) {
+      if (gameEnd.winner === userId) {
+        playSound('win');
+      } else {
+        playSound('loss');
+      }
       const timer = setTimeout(() => setShowOverlay(true), 600);
       return () => clearTimeout(timer);
     }
-  }, [gameEnd]);
+  }, [gameEnd, userId, playSound]);
 
   const gameId = matchData?.game_id || 'tictactoe';
   const isBackgammon = gameId === 'backgammon';
