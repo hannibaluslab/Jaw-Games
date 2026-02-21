@@ -1,13 +1,14 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatUnits } from 'viem';
 import dynamic from 'next/dynamic';
 import { useGameWebSocket } from '@/lib/hooks/useGameWebSocket';
 import { useApi } from '@/lib/hooks/useApi';
 import { useGameSounds } from '@/lib/hooks/useGameSounds';
-import { BLOCK_EXPLORER_URL, PLATFORM_FEE, WINNER_SHARE, getTokenSymbol } from '@/lib/contracts';
+import { BLOCK_EXPLORER_URL, PLATFORM_FEE, WINNER_SHARE, getTokenSymbol, ESCROW_CONTRACT_ADDRESS, ESCROW_ABI } from '@/lib/contracts';
+import { publicClient } from '@/lib/account';
 import TicTacToeBoard from './components/TicTacToeBoard';
 
 const BackgammonBoard = dynamic(() => import('./components/BackgammonBoard'), {
@@ -48,6 +49,8 @@ export default function PlayGamePage() {
   }, [router]);
 
   const [matchData, setMatchData] = useState<any>(null);
+  const [syncDone, setSyncDone] = useState(false);
+  const syncedRef = useRef(false);
   const api = useApi();
 
   useEffect(() => {
@@ -59,7 +62,57 @@ export default function PlayGamePage() {
     });
   }, [api, matchId]);
 
-  if (!userId || !matchData) {
+  // Auto-sync: check on-chain state and update backend if DB is behind
+  useEffect(() => {
+    if (!matchData || !matchId || syncedRef.current) return;
+    syncedRef.current = true;
+
+    const needsSync = ['created', 'accepted', 'pending_creation'].includes(matchData.status);
+    if (!needsSync) {
+      setSyncDone(true);
+      return;
+    }
+
+    const doSync = async () => {
+      try {
+        const onChain = await publicClient.readContract({
+          address: ESCROW_CONTRACT_ADDRESS,
+          abi: ESCROW_ABI,
+          functionName: 'matches',
+          args: [matchId as `0x${string}`],
+        }) as any;
+
+        const status = Array.isArray(onChain) ? Number(onChain[5]) : Number(onChain.status);
+        const playerADep = Array.isArray(onChain) ? onChain[9] : onChain.playerADeposited;
+        const playerBDep = Array.isArray(onChain) ? onChain[10] : onChain.playerBDeposited;
+        const playerA = Array.isArray(onChain) ? onChain[1] : onChain.playerA;
+
+        if (playerA && playerA !== '0x0000000000000000000000000000000000000000') {
+          if (status >= 1 && matchData.status === 'created') {
+            await api.confirmMatchAccepted(matchId, 'sync');
+          }
+          if (playerADep && !matchData.player_a_deposited && matchData.player_a_address) {
+            await api.confirmDeposit(matchId, matchData.player_a_address, 'sync');
+          }
+          if (playerBDep && !matchData.player_b_deposited && matchData.player_b_address) {
+            await api.confirmDeposit(matchId, matchData.player_b_address, 'sync');
+          }
+          // Refetch match data after sync
+          const res = await api.getMatch(matchId);
+          if (res.data) {
+            setMatchData(res.data.match || res.data);
+          }
+        }
+      } catch (e) {
+        // On-chain query failed, continue anyway
+      }
+      setSyncDone(true);
+    };
+
+    doSync();
+  }, [matchData, matchId, api]);
+
+  if (!userId || !matchData || !syncDone) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
