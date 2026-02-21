@@ -124,6 +124,8 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
           sendMove={sendMove}
           validMoves={validMoves}
           noMoves={noMoves}
+          stakeAmount={stakeNum}
+          tokenSymbol={tokenSymbol}
         />
       ) : (
         <TicTacToeBoard
