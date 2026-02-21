@@ -265,41 +265,40 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   const bottomLeftPoints = isPlayer1 ? [11, 10, 9, 8, 7, 6] : [12, 13, 14, 15, 16, 17];
   const bottomRightPoints = isPlayer1 ? [5, 4, 3, 2, 1, 0] : [18, 19, 20, 21, 22, 23];
 
-  // When browser is portrait: rotate content 90° so user holds phone sideways.
-  // Safari stays in portrait mode = thin chrome on what becomes the side edge.
-  // When browser is landscape (desktop or rotation-lock off): render normally.
-  const outerStyle: React.CSSProperties = isPortrait
-    ? {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100dvh',
-        height: '100vw',
-        transformOrigin: '0 0',
-        transform: 'translate(100vw, 0) rotate(90deg)',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#111827',
-        overflow: 'hidden',
-        touchAction: 'none',
-        boxSizing: 'border-box',
-      }
-    : {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#111827',
-        overflow: 'hidden',
-        touchAction: 'none',
-        boxSizing: 'border-box',
-      };
+  // When browser is landscape (rotation lock off), show overlay asking user to lock portrait
+  if (!isPortrait) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100dvh',
+        background: '#374151', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', color: '#fff',
+        padding: 32, textAlign: 'center', zIndex: 100,
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Turn On Portrait Lock</h2>
+        <p style={{ color: '#d1d5db', fontSize: 14, lineHeight: 1.5, maxWidth: 280 }}>
+          Open Control Center and tap the rotation lock icon, then hold your phone sideways to play.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div style={outerStyle}>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100dvh',
+      height: '100vw',
+      transformOrigin: '0 0',
+      transform: 'translate(100vw, 0) rotate(90deg)',
+      display: 'flex',
+      flexDirection: 'column',
+      background: '#111827',
+      overflow: 'hidden',
+      touchAction: 'none',
+      boxSizing: 'border-box',
+    }}>
       {noMoves && (
         <div style={{
           position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
