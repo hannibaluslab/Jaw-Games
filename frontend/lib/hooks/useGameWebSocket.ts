@@ -51,6 +51,10 @@ export function useGameWebSocket(matchId: string, userId: string) {
           if (data.gameState) {
             setGameState(data.gameState);
           }
+          // If other players are already in the room, mark opponent as connected
+          if (data.playersInRoom && data.playersInRoom > 0) {
+            setOpponentConnected(true);
+          }
           break;
         case 'game_update':
           setGameState(data.gameState);

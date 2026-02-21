@@ -65,14 +65,15 @@ class WebSocketService {
   async handleAuth(ws, payload) {
     const { userId } = payload;
 
-    // Store connection
-    this.clients.set(userId, ws);
-    ws.userId = userId;
+    // Store connection (coerce to string for consistent Map keys)
+    const uid = String(userId);
+    this.clients.set(uid, ws);
+    ws.userId = uid;
 
     ws.send(
       JSON.stringify({
         type: 'auth_success',
-        userId,
+        userId: uid,
       })
     );
   }
@@ -87,7 +88,9 @@ class WebSocketService {
       return;
     }
 
-    if (match.player_a_id !== userId && match.player_b_id !== userId) {
+    // Use loose equality to handle string/number mismatch from DB vs WebSocket
+    if (match.player_a_id != userId && match.player_b_id != userId) {
+      console.log(`[WS] Player check failed: player_a_id=${match.player_a_id} (${typeof match.player_a_id}), player_b_id=${match.player_b_id} (${typeof match.player_b_id}), userId=${userId} (${typeof userId})`);
       ws.send(JSON.stringify({ type: 'error', error: 'Not a player in this match' }));
       return;
     }
@@ -97,6 +100,9 @@ class WebSocketService {
       this.matchRooms.set(matchId, new Set());
     }
     this.matchRooms.get(matchId).add(userId);
+
+    const gameId = match.game_id || 'tictactoe';
+    console.log(`[WS] Player ${userId} joining match ${matchId.slice(0, 10)}... (game=${gameId}, status=${match.status}, room=${this.matchRooms.get(matchId).size})`);
 
     // Get or create game session
     let session = await GameSession.findByMatchId(match.id);
@@ -127,12 +133,20 @@ class WebSocketService {
     const gameState = session
       ? (typeof session.game_state === 'string' ? JSON.parse(session.game_state) : session.game_state)
       : null;
+
+    // Count how many OTHER players are in the room (so joining player knows if opponent is already here)
+    const room = this.matchRooms.get(matchId);
+    const playersInRoom = room ? [...room].filter(id => id !== userId).length : 0;
+
+    console.log(`[WS] Sending match_joined to ${userId}: session=${!!session}, gameState=${!!gameState}, gameId=${gameId}, othersInRoom=${playersInRoom}`);
+
     ws.send(
       JSON.stringify({
         type: 'match_joined',
         matchId,
         gameState,
         match,
+        playersInRoom,
       })
     );
 
@@ -143,7 +157,6 @@ class WebSocketService {
     });
 
     // For slime soccer: start real-time session when both players are in
-    const gameId = match.game_id || 'tictactoe';
     if (gameId === 'slimesoccer' && gameState) {
       await this.maybeStartSlimeSession(matchId, match, gameState);
     }
@@ -318,10 +331,18 @@ class WebSocketService {
    * Start a SlimeSoccer real-time session when both players are in the room.
    */
   async maybeStartSlimeSession(matchId, match, gameState) {
-    if (this.slimeSessions.has(matchId)) return; // already running
+    if (this.slimeSessions.has(matchId)) {
+      console.log(`[SlimeSoccer] Session already running for match ${matchId.slice(0, 10)}...`);
+      return;
+    }
 
     const room = this.matchRooms.get(matchId);
-    if (!room || room.size < 2) return; // need both players
+    if (!room || room.size < 2) {
+      console.log(`[SlimeSoccer] Not enough players for match ${matchId.slice(0, 10)}... (room=${room ? room.size : 0}, players=[${room ? [...room].join(',') : ''}])`);
+      return;
+    }
+
+    console.log(`[SlimeSoccer] Starting session for match ${matchId.slice(0, 10)}... (players=[${[...room].join(',')}])`);
 
     const broadcastFn = (msg) => {
       this.broadcastToMatch(matchId, null, msg);
@@ -389,12 +410,22 @@ class WebSocketService {
     // If a newer connection has replaced this one, don't clean up
     if (this.clients.get(userId) !== ws) return;
 
+    console.log(`[WS] Player ${userId} disconnected`);
     this.clients.delete(userId);
 
     // Remove from all match rooms
     for (const [matchId, users] of this.matchRooms.entries()) {
       if (users.has(userId)) {
         users.delete(userId);
+
+        // Stop slime soccer session if a player disconnects
+        const slimeSession = this.slimeSessions.get(matchId);
+        if (slimeSession) {
+          console.log(`[SlimeSoccer] Stopping session for match ${matchId.slice(0, 10)}... (player ${userId} disconnected)`);
+          slimeSession.stop();
+          this.slimeSessions.delete(matchId);
+        }
+
         this.broadcastToMatch(matchId, userId, {
           type: 'player_disconnected',
           userId,

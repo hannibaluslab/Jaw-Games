@@ -69,6 +69,10 @@ export function useSlimeSoccerWebSocket(matchId: string, userId: string) {
           if (data.gameState) {
             stateRef.current = data.gameState;
           }
+          // If other players are already in the room, mark opponent as connected
+          if (data.playersInRoom && data.playersInRoom > 0) {
+            setOpponentConnected(true);
+          }
           break;
 
         case 'game_tick':
