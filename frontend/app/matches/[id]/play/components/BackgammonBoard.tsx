@@ -21,7 +21,13 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   const [selectedFrom, setSelectedFrom] = useState<number | 'bar' | null>(null);
   const [pendingSubmoves, setPendingSubmoves] = useState<BackgammonSubmove[]>([]);
   const [localState, setLocalState] = useState<BackgammonGameState>(gameState);
-  const [isLandscape, setIsLandscape] = useState(true);
+  // Detect if browser is in portrait (the normal/expected case on mobile).
+  // When portrait, we CSS-rotate the board 90° so the user holds the phone sideways
+  // while Safari stays in portrait mode with its thin chrome.
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerHeight > window.innerWidth;
+  });
 
   if (!gameState?.board || !gameState?.bar || !gameState?.borneOff) {
     return (
@@ -36,8 +42,14 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   const isMyTurn = gameState.currentTurn === myPlayerKey && !gameState.winner;
   const mySign = myPlayerKey === 'player1' ? 1 : -1;
 
+  // Try to lock to portrait (works on Android Chrome, no-op on iOS Safari)
   useEffect(() => {
-    const check = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    try { (screen.orientation as any)?.lock?.('portrait'); } catch {}
+  }, []);
+
+  // Detect portrait vs landscape for rotation logic
+  useEffect(() => {
+    const check = () => setIsPortrait(window.innerHeight > window.innerWidth);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
@@ -91,7 +103,6 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
     setSelectedFrom(null);
   };
 
-  // Checker size scales with viewport height so they fit on small screens
   const checkerSize = 'clamp(14px, 7dvh, 28px)';
   const barCheckerSize = 'clamp(12px, 6dvh, 24px)';
 
@@ -248,49 +259,47 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
     );
   };
 
-  if (!isLandscape) {
-    return (
-      <div style={{
-        position: 'fixed', top: 0, left: 0, width: '100dvw', height: '100dvh',
-        background: '#111827', boxSizing: 'border-box',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', zIndex: 100, padding: 24, textAlign: 'center',
-        touchAction: 'none', overscrollBehavior: 'none' as any,
-      }}>
-        <div style={{ fontSize: 48, marginBottom: 24, animation: 'rotate90 2s ease-in-out infinite' }}>↻</div>
-        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Rotate Your Device</h2>
-        <p style={{ color: '#9ca3af', fontSize: 14 }}>Backgammon plays best in landscape mode</p>
-        <style>{`@keyframes rotate90 { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } }`}</style>
-      </div>
-    );
-  }
-
   const isPlayer1 = myPlayerKey === 'player1';
   const topLeftPoints = isPlayer1 ? [12, 13, 14, 15, 16, 17] : [11, 10, 9, 8, 7, 6];
   const topRightPoints = isPlayer1 ? [18, 19, 20, 21, 22, 23] : [5, 4, 3, 2, 1, 0];
   const bottomLeftPoints = isPlayer1 ? [11, 10, 9, 8, 7, 6] : [12, 13, 14, 15, 16, 17];
   const bottomRightPoints = isPlayer1 ? [5, 4, 3, 2, 1, 0] : [18, 19, 20, 21, 22, 23];
 
+  // When browser is portrait: rotate content 90° so user holds phone sideways.
+  // Safari stays in portrait mode = thin chrome on what becomes the side edge.
+  // When browser is landscape (desktop or rotation-lock off): render normally.
+  const outerStyle: React.CSSProperties = isPortrait
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100dvh',
+        height: '100vw',
+        transformOrigin: '0 0',
+        transform: 'translate(100vw, 0) rotate(90deg)',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#111827',
+        overflow: 'hidden',
+        touchAction: 'none',
+        boxSizing: 'border-box',
+      }
+    : {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#111827',
+        overflow: 'hidden',
+        touchAction: 'none',
+        boxSizing: 'border-box',
+      };
+
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100dvw',
-      height: '100dvh',
-      maxHeight: '100dvh',
-      boxSizing: 'border-box',
-      display: 'flex',
-      flexDirection: 'column',
-      background: '#111827',
-      overflow: 'hidden',
-      touchAction: 'none',
-      overscrollBehavior: 'none' as any,
-      paddingTop: 'env(safe-area-inset-top, 0px)',
-      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-      paddingLeft: 'env(safe-area-inset-left, 0px)',
-      paddingRight: 'env(safe-area-inset-right, 0px)',
-    }}>
+    <div style={outerStyle}>
       {noMoves && (
         <div style={{
           position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
