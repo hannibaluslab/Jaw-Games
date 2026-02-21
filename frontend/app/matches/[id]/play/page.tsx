@@ -108,7 +108,7 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
   const iWon = gameEnd?.winner === userId;
 
   return (
-    <div className={`${isBackgammon ? 'h-screen' : 'min-h-screen'} bg-gray-900 flex flex-col items-center justify-center ${isBackgammon ? '' : 'p-4'} relative overflow-hidden`}>
+    <div className={`min-h-screen bg-gray-900 flex flex-col items-center justify-center ${isBackgammon ? '' : 'p-4'} relative overflow-hidden`}>
       {/* Stake info for TicTacToe */}
       {!isBackgammon && matchData && (
         <div className="absolute top-4 right-4 text-gray-500 text-xs">
