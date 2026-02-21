@@ -251,10 +251,11 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
   if (!isLandscape) {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: '#111827',
+        position: 'fixed', top: 0, left: 0, width: '100dvw', height: '100dvh',
+        background: '#111827', boxSizing: 'border-box',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         color: '#fff', zIndex: 100, padding: 24, textAlign: 'center',
-        touchAction: 'none', overscrollBehavior: 'none',
+        touchAction: 'none', overscrollBehavior: 'none' as any,
       }}>
         <div style={{ fontSize: 48, marginBottom: 24, animation: 'rotate90 2s ease-in-out infinite' }}>↻</div>
         <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Rotate Your Device</h2>
@@ -272,14 +273,23 @@ export default function BackgammonBoard({ gameState, userId, sendMove, validMove
 
   return (
     <div style={{
-      width: '100dvw', height: '100dvh', maxHeight: '100dvh',
-      display: 'flex', flexDirection: 'column',
-      background: '#111827', overflow: 'hidden',
-      position: 'fixed', inset: 0,
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100dvw',
+      height: '100dvh',
+      maxHeight: '100dvh',
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      background: '#111827',
+      overflow: 'hidden',
       touchAction: 'none',
       overscrollBehavior: 'none' as any,
-      WebkitOverflowScrolling: 'auto' as any,
-      padding: 'env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0)',
+      paddingTop: 'env(safe-area-inset-top, 0px)',
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      paddingLeft: 'env(safe-area-inset-left, 0px)',
+      paddingRight: 'env(safe-area-inset-right, 0px)',
     }}>
       {noMoves && (
         <div style={{
