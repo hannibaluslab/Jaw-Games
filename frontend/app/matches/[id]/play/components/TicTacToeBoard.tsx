@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+import { useGameSounds } from '@/lib/hooks/useGameSounds';
+
 interface TicTacToeBoardProps {
   gameState: any;
   userId: string;
@@ -11,6 +14,24 @@ export default function TicTacToeBoard({ gameState, userId, sendMove, drawFlash 
   const mySymbol = gameState.playerX === userId ? 'X' : 'O';
   const isMyTurn = gameState.currentTurn === mySymbol && !gameState.winner;
   const isGameOver = !!gameState.winner;
+
+  const { playSound } = useGameSounds();
+  const prevMovesRef = useRef<number>(gameState.moves?.length ?? 0);
+  const isFirstRender = useRef(true);
+
+  // Play sound on new moves
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      prevMovesRef.current = gameState.moves?.length ?? 0;
+      return;
+    }
+    const currMoves = gameState.moves?.length ?? 0;
+    if (currMoves > prevMovesRef.current) {
+      playSound('move');
+    }
+    prevMovesRef.current = currMoves;
+  }, [gameState, playSound]);
 
   const handleCellClick = (index: number) => {
     if (!isMyTurn || gameState.board[index] !== null || isGameOver) return;
