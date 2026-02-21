@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { PLATFORM_FEE, WINNER_SHARE } from '@/lib/contracts';
+import { WINNER_SHARE } from '@/lib/contracts';
 
 export default function GamesPage() {
   const router = useRouter();
@@ -58,6 +58,23 @@ export default function GamesPage() {
               <div className="text-4xl sm:text-5xl mb-3 sm:mb-4">🎲</div>
               <h2 className="text-xl sm:text-2xl font-bold mb-2">Backgammon</h2>
               <p className="text-white/90 text-sm sm:text-base mb-3 sm:mb-4">Classic board game — landscape mode</p>
+              <div className="flex items-center justify-between mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/20 text-sm">
+                <span>Min. Stake</span>
+                <span className="font-bold">$1 USDC</span>
+              </div>
+            </div>
+          </button>
+          <button
+            onClick={() => router.push('/create-match?game=slimesoccer')}
+            className="w-full bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-xl p-6 sm:p-8 hover:shadow-xl transition transform hover:scale-105 text-left relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 text-white/10 text-7xl sm:text-9xl font-bold -mr-4 -mt-4">
+              ⚽
+            </div>
+            <div className="relative z-10">
+              <div className="text-4xl sm:text-5xl mb-3 sm:mb-4">⚽</div>
+              <h2 className="text-xl sm:text-2xl font-bold mb-2">Slime Soccer</h2>
+              <p className="text-white/90 text-sm sm:text-base mb-3 sm:mb-4">3-minute real-time match — landscape mode</p>
               <div className="flex items-center justify-between mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/20 text-sm">
                 <span>Min. Stake</span>
                 <span className="font-bold">$1 USDC</span>

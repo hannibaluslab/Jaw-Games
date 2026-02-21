@@ -3,12 +3,14 @@ const GameSession = require('../models/GameSession');
 const Match = require('../models/Match');
 const { getGameEngine } = require('../games/index');
 const SettlementService = require('./settlementService');
+const SlimeSoccerSession = require('../games/slimesoccer-session');
 
 class WebSocketService {
   constructor(server) {
     this.wss = new WebSocket.Server({ server, path: '/ws' });
     this.clients = new Map(); // userId -> WebSocket
     this.matchRooms = new Map(); // matchId -> Set of userIds
+    this.slimeSessions = new Map(); // matchId -> SlimeSoccerSession
 
     this.wss.on('connection', (ws) => this.handleConnection(ws));
 
@@ -49,8 +51,11 @@ class WebSocketService {
       case 'game_move':
         await this.handleGameMove(ws, payload);
         break;
+      case 'control_input':
+        this.handleControlInput(ws, payload);
+        break;
       case 'ping':
-        ws.send(JSON.stringify({ type: 'pong' }));
+        ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
         break;
       default:
         ws.send(JSON.stringify({ type: 'error', error: 'Unknown message type' }));
@@ -100,7 +105,7 @@ class WebSocketService {
     if (session && !session.ended_at) {
       const gs = typeof session.game_state === 'string' ? JSON.parse(session.game_state) : session.game_state;
       const gameId = match.game_id || 'tictactoe';
-      const isWrongState = (gameId === 'backgammon' && !gs.borneOff) || (gameId === 'tictactoe' && !gs.cells);
+      const isWrongState = (gameId === 'backgammon' && !gs.borneOff) || (gameId === 'tictactoe' && !gs.cells) || (gameId === 'slimesoccer' && !gs.leftSlime);
       if (isWrongState) {
         console.log(`Deleting stale game session for match ${matchId} (wrong state for ${gameId})`);
         await GameSession.deleteByMatchId(match.id);
@@ -136,6 +141,12 @@ class WebSocketService {
       type: 'player_joined',
       userId,
     });
+
+    // For slime soccer: start real-time session when both players are in
+    const gameId = match.game_id || 'tictactoe';
+    if (gameId === 'slimesoccer' && gameState) {
+      await this.maybeStartSlimeSession(matchId, match, gameState);
+    }
   }
 
   async handleLeaveMatch(ws, payload) {
@@ -143,6 +154,13 @@ class WebSocketService {
 
     if (this.matchRooms.has(matchId)) {
       this.matchRooms.get(matchId).delete(userId);
+    }
+
+    // Stop slime soccer session if a player leaves
+    const slimeSession = this.slimeSessions.get(matchId);
+    if (slimeSession) {
+      slimeSession.stop();
+      this.slimeSessions.delete(matchId);
     }
 
     this.broadcastToMatch(matchId, userId, {
@@ -283,6 +301,82 @@ class WebSocketService {
       console.error('Game move error:', error);
       ws.send(JSON.stringify({ type: 'error', error: error.message }));
     }
+  }
+
+  handleControlInput(ws, payload) {
+    const { matchId, userId, keys } = payload;
+    const session = this.slimeSessions.get(matchId);
+    if (session) {
+      session.setPlayerInput(userId, keys);
+    }
+  }
+
+  /**
+   * Start a SlimeSoccer real-time session when both players are in the room.
+   */
+  async maybeStartSlimeSession(matchId, match, gameState) {
+    if (this.slimeSessions.has(matchId)) return; // already running
+
+    const room = this.matchRooms.get(matchId);
+    if (!room || room.size < 2) return; // need both players
+
+    const broadcastFn = (msg) => {
+      this.broadcastToMatch(matchId, null, msg);
+    };
+
+    const onGameEnd = async (finalState) => {
+      this.slimeSessions.delete(matchId);
+
+      const result = getGameEngine('slimesoccer').getResult(finalState);
+      const session = await GameSession.findByMatchId(match.id);
+
+      if (session) {
+        await GameSession.endGame(session.id, {
+          winner: finalState.winner,
+          finalState,
+          endedAt: new Date(),
+        });
+      }
+
+      // Handle draw — for slime soccer, sudden death or just settle as draw
+      if (result.isDraw) {
+        this.broadcastToMatch(matchId, null, {
+          type: 'game_ended',
+          result: 'draw',
+          winner: null,
+          gameState: finalState,
+        });
+        // Settle as draw (refund both)
+        SettlementService.processMatchResult(matchId, null, {
+          finalState,
+          winner: null,
+          isDraw: true,
+        }).then((txHash) => {
+          this.broadcastToMatch(matchId, null, { type: 'settlement_complete', txHash });
+        }).catch((err) => {
+          console.error('Settlement failed:', err.message);
+        });
+      } else {
+        this.broadcastToMatch(matchId, null, {
+          type: 'game_ended',
+          result: 'winner',
+          winner: result.winner,
+          gameState: finalState,
+        });
+        SettlementService.processMatchResult(matchId, result.winner, {
+          finalState,
+          winner: result.winner,
+        }).then((txHash) => {
+          this.broadcastToMatch(matchId, null, { type: 'settlement_complete', txHash });
+        }).catch((err) => {
+          console.error('Settlement failed:', err.message);
+        });
+      }
+    };
+
+    const slimeSession = new SlimeSoccerSession(matchId, gameState, broadcastFn, onGameEnd);
+    this.slimeSessions.set(matchId, slimeSession);
+    slimeSession.start();
   }
 
   handleDisconnect(ws) {
