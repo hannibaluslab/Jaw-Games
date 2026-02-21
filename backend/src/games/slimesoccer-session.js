@@ -44,9 +44,10 @@ class SlimeSoccerSession {
   }
 
   setPlayerInput(userId, keys) {
-    if (userId === this.state.player1) {
+    // Use loose equality to handle string/number mismatch (WS sends strings, DB may return numbers)
+    if (userId == this.state.player1) {
       this.leftInputs = keys;
-    } else if (userId === this.state.player2) {
+    } else if (userId == this.state.player2) {
       this.rightInputs = keys;
     }
   }
