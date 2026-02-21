@@ -4,6 +4,7 @@ const Match = require('../models/Match');
 const { getGameEngine } = require('../games/index');
 const SettlementService = require('./settlementService');
 const SlimeSoccerSession = require('../games/slimesoccer-session');
+const { escrowContract } = require('../config/blockchain');
 
 class WebSocketService {
   constructor(server) {
@@ -82,7 +83,7 @@ class WebSocketService {
     const { matchId, userId } = payload;
 
     // Get match and verify user is a player
-    const match = await Match.findByMatchId(matchId);
+    let match = await Match.findByMatchId(matchId);
     if (!match) {
       ws.send(JSON.stringify({ type: 'error', error: 'Match not found' }));
       return;
@@ -116,6 +117,36 @@ class WebSocketService {
         console.log(`Deleting stale game session for match ${matchId} (wrong state for ${gameId})`);
         await GameSession.deleteByMatchId(match.id);
         session = null;
+      }
+    }
+
+    // If match isn't ready in DB, check on-chain state as fallback and sync DB
+    if (!session && match.status !== 'ready' && !(match.player_a_deposited && match.player_b_deposited)) {
+      try {
+        const onChain = await escrowContract.matches(matchId);
+        const onChainStatus = Number(onChain.status);
+        const playerADep = onChain.playerADeposited;
+        const playerBDep = onChain.playerBDeposited;
+        const playerA = onChain.playerA;
+
+        if (playerA && playerA !== '0x0000000000000000000000000000000000000000') {
+          console.log(`[WS] On-chain fallback for ${matchId.slice(0, 10)}: status=${onChainStatus}, A_dep=${playerADep}, B_dep=${playerBDep}`);
+          // Sync deposits to DB
+          if (playerADep && !match.player_a_deposited) {
+            await Match.updateDeposit(matchId, match.player_a_id);
+          }
+          if (playerBDep && !match.player_b_deposited) {
+            await Match.updateDeposit(matchId, match.player_b_id);
+          }
+          // If on-chain is accepted but DB isn't, update status
+          if (onChainStatus >= 1 && match.status === 'created') {
+            await Match.updateStatus(matchId, 'accepted');
+          }
+          // Re-fetch match after sync
+          match = await Match.findByMatchId(matchId);
+        }
+      } catch (err) {
+        console.log(`[WS] On-chain fallback query failed: ${err.message}`);
       }
     }
 

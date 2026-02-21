@@ -68,6 +68,16 @@ export function useSlimeSoccerWebSocket(matchId: string, userId: string) {
           if (data.match) setMatchData(data.match);
           if (data.gameState) {
             stateRef.current = data.gameState;
+          } else {
+            // No game session yet — retry join after a delay (sync may still be propagating)
+            setTimeout(() => {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                  type: 'join_match',
+                  payload: { matchId, userId },
+                }));
+              }
+            }, 2000);
           }
           // If other players are already in the room, mark opponent as connected
           if (data.playersInRoom && data.playersInRoom > 0) {

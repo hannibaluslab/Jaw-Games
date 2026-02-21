@@ -46,23 +46,88 @@ export default function SlimeSoccerBoard({ matchId, userId, stakeAmount, tokenSy
   const { playSound, startMusic, stopMusic } = useGameSounds();
   const musicStartedRef = useRef(false);
 
+  // Detect mobile vs desktop (touch-only devices are mobile)
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window && window.innerWidth < 1024;
+  });
+
   const [isPortrait, setIsPortrait] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerHeight > window.innerWidth;
   });
 
-  // Detect orientation
+  // Detect orientation + mobile
   useEffect(() => {
-    const check = () => setIsPortrait(window.innerHeight > window.innerWidth);
+    const check = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+      setIsMobile('ontouchstart' in window && window.innerWidth < 1024);
+    };
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Try to lock portrait
+  // Try to lock portrait on mobile only
   useEffect(() => {
-    try { (screen.orientation as any)?.lock?.('portrait'); } catch {}
-  }, []);
+    if (isMobile) {
+      try { (screen.orientation as any)?.lock?.('portrait'); } catch {}
+    }
+  }, [isMobile]);
+
+  // Keyboard controls for desktop
+  useEffect(() => {
+    if (isMobile) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      let changed = false;
+      if (e.key === 'ArrowLeft' || e.key === 'a') {
+        if (!keysRef.current.left) { keysRef.current.left = true; changed = true; }
+      }
+      if (e.key === 'ArrowRight' || e.key === 'd') {
+        if (!keysRef.current.right) { keysRef.current.right = true; changed = true; }
+      }
+      if (e.key === 'ArrowUp' || e.key === 'w') {
+        if (!keysRef.current.jump) { keysRef.current.jump = true; changed = true; }
+      }
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === ' ') {
+        if (!keysRef.current.grab) { keysRef.current.grab = true; changed = true; }
+      }
+      if (changed) {
+        e.preventDefault();
+        sendInput(keysRef.current);
+        prevKeysRef.current = { ...keysRef.current };
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      let changed = false;
+      if (e.key === 'ArrowLeft' || e.key === 'a') {
+        if (keysRef.current.left) { keysRef.current.left = false; changed = true; }
+      }
+      if (e.key === 'ArrowRight' || e.key === 'd') {
+        if (keysRef.current.right) { keysRef.current.right = false; changed = true; }
+      }
+      if (e.key === 'ArrowUp' || e.key === 'w') {
+        if (keysRef.current.jump) { keysRef.current.jump = false; changed = true; }
+      }
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === ' ') {
+        if (keysRef.current.grab) { keysRef.current.grab = false; changed = true; }
+      }
+      if (changed) {
+        e.preventDefault();
+        sendInput(keysRef.current);
+        prevKeysRef.current = { ...keysRef.current };
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isMobile, sendInput]);
 
   // Handle sound events from server
   useEffect(() => {
@@ -215,8 +280,8 @@ export default function SlimeSoccerBoard({ matchId, userId, stakeAmount, tokenSy
     prevKeysRef.current = { ...keysRef.current };
   }, [sendInput]);
 
-  // Landscape overlay (portrait lock required)
-  if (!isPortrait) {
+  // Landscape overlay — mobile only (portrait lock required for CSS rotation trick)
+  if (isMobile && !isPortrait) {
     return (
       <div style={{
         position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column',
@@ -238,25 +303,36 @@ export default function SlimeSoccerBoard({ matchId, userId, stakeAmount, tokenSy
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // CSS rotation trick for portrait mode (same as backgammon)
-  const outerStyle: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100dvh',
-    height: '100vw',
-    transformOrigin: '0 0',
-    transform: 'translate(100vw, 0) rotate(90deg)',
-    display: 'flex',
-    flexDirection: 'column',
-    background: '#0f0f23',
-    overflow: 'hidden',
-    touchAction: 'none',
-    boxSizing: 'border-box',
-  };
+  // Mobile: CSS rotation trick for portrait mode (same as backgammon)
+  // Desktop: normal landscape layout, no rotation needed
+  const outerStyle: React.CSSProperties = isMobile
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100dvh',
+        height: '100vw',
+        transformOrigin: '0 0',
+        transform: 'translate(100vw, 0) rotate(90deg)',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#0f0f23',
+        overflow: 'hidden',
+        touchAction: 'none',
+        boxSizing: 'border-box',
+      }
+    : {
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#0f0f23',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+      };
 
   return (
-    <div style={outerStyle}>
+    <div style={outerStyle} tabIndex={0}>
       {/* Info bar */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -277,6 +353,12 @@ export default function SlimeSoccerBoard({ matchId, userId, stakeAmount, tokenSy
             <span style={{ color: '#a78bfa' }}>{stakeAmount * 2} {tokenSymbol}</span>
           )}
           <span>{ping}ms</span>
+          {/* Connection status */}
+          {!gameStarted && (
+            <span style={{ color: connected ? '#52b788' : '#ef4444' }}>
+              {connected ? (opponentConnected ? 'Both ready' : 'Waiting for opponent...') : 'Connecting...'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -295,48 +377,58 @@ export default function SlimeSoccerBoard({ matchId, userId, stakeAmount, tokenSy
         />
       </div>
 
-      {/* Touch controls */}
+      {/* Controls bar — touch buttons on mobile, keyboard hint on desktop */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '8px 12px', background: '#1a1a2e', flexShrink: 0,
         borderTop: '1px solid #333',
       }}>
-        {/* Left side: movement buttons */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <ControlButton
-            label="←"
-            onPress={() => handleTouchStart('left')}
-            onRelease={() => handleTouchEnd('left')}
-            color="#4a9eff"
-          />
-          <ControlButton
-            label="→"
-            onPress={() => handleTouchStart('right')}
-            onRelease={() => handleTouchEnd('right')}
-            color="#4a9eff"
-          />
-        </div>
+        {isMobile ? (
+          <>
+            {/* Left side: movement buttons */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <ControlButton
+                label="←"
+                onPress={() => handleTouchStart('left')}
+                onRelease={() => handleTouchEnd('left')}
+                color="#4a9eff"
+              />
+              <ControlButton
+                label="→"
+                onPress={() => handleTouchStart('right')}
+                onRelease={() => handleTouchEnd('right')}
+                color="#4a9eff"
+              />
+            </div>
 
-        {/* Connection status */}
-        <div style={{ fontSize: 10, color: connected ? '#52b788' : '#ef4444', fontFamily: 'monospace' }}>
-          {!gameStarted && (connected ? (opponentConnected ? 'Both ready' : 'Waiting for opponent...') : 'Connecting...')}
-        </div>
-
-        {/* Right side: action buttons */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <ControlButton
-            label="JUMP"
-            onPress={() => handleTouchStart('jump')}
-            onRelease={() => handleTouchEnd('jump')}
-            color="#22c55e"
-          />
-          <ControlButton
-            label="GRAB"
-            onPress={() => handleTouchStart('grab')}
-            onRelease={() => handleTouchEnd('grab')}
-            color="#f59e0b"
-          />
-        </div>
+            {/* Right side: action buttons */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <ControlButton
+                label="JUMP"
+                onPress={() => handleTouchStart('jump')}
+                onRelease={() => handleTouchEnd('jump')}
+                color="#22c55e"
+              />
+              <ControlButton
+                label="GRAB"
+                onPress={() => handleTouchStart('grab')}
+                onRelease={() => handleTouchEnd('grab')}
+                color="#f59e0b"
+              />
+            </div>
+          </>
+        ) : (
+          <div style={{
+            display: 'flex', gap: 24, alignItems: 'center', width: '100%',
+            justifyContent: 'center', color: '#666', fontFamily: 'monospace', fontSize: 12,
+          }}>
+            <span><KeyBadge k="←" /> <KeyBadge k="→" /> Move</span>
+            <span><KeyBadge k="↑" /> Jump</span>
+            <span><KeyBadge k="↓" /> <KeyBadge k="Space" /> Grab</span>
+            <span style={{ color: '#555' }}>or</span>
+            <span><KeyBadge k="A" /> <KeyBadge k="D" /> <KeyBadge k="W" /> <KeyBadge k="S" /></span>
+          </div>
+        )}
       </div>
 
       {/* Error display */}
@@ -466,6 +558,27 @@ function drawSlime(ctx: CanvasRenderingContext2D, x: number, y: number, color: s
     ctx.textAlign = 'center';
     ctx.fillText('YOU', x, y - SLIME_RADIUS - 6);
   }
+}
+
+// Helper: Keyboard key badge for desktop controls hint
+function KeyBadge({ k }: { k: string }) {
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 6px',
+      borderRadius: 4,
+      background: '#2a2a3e',
+      border: '1px solid #444',
+      color: '#aaa',
+      fontSize: 11,
+      fontFamily: 'monospace',
+      lineHeight: '16px',
+      minWidth: 20,
+      textAlign: 'center',
+    }}>
+      {k}
+    </span>
+  );
 }
 
 // Helper: Draw camping timer bar

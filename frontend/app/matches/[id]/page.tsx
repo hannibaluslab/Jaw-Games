@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatUnits, encodeFunctionData } from 'viem';
 import { useJawAccount } from '@/lib/contexts/AccountContext';
-import { JAW_PAYMASTER_URL } from '@/lib/account';
+import { publicClient, JAW_PAYMASTER_URL } from '@/lib/account';
 import { useApi } from '@/lib/hooks/useApi';
 import { ESCROW_CONTRACT_ADDRESS, ESCROW_ABI, ERC20_ABI, getTokenSymbol, PLATFORM_FEE, WINNER_SHARE, ENS_DOMAIN, BLOCK_EXPLORER_URL, USDC_ADDRESS } from '@/lib/contracts';
 
@@ -41,6 +41,53 @@ export default function MatchDetailsPage() {
     return () => clearInterval(interval);
   }, [fetchMatch]);
 
+  // Auto-sync: check on-chain state and update backend if DB is behind
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (!match || !address || syncedRef.current) return;
+    // Only sync if the match appears to be in an early state but might be funded on-chain
+    if (match.status !== 'created' && match.status !== 'accepted' && match.status !== 'pending_creation') return;
+
+    const syncOnChainState = async () => {
+      try {
+        const onChain = await publicClient.readContract({
+          address: ESCROW_CONTRACT_ADDRESS,
+          abi: ESCROW_ABI,
+          functionName: 'matches',
+          args: [matchId as `0x${string}`],
+        }) as any;
+
+        const status = Array.isArray(onChain) ? Number(onChain[5]) : Number(onChain.status);
+        const playerADep = Array.isArray(onChain) ? onChain[9] : onChain.playerADeposited;
+        const playerBDep = Array.isArray(onChain) ? onChain[10] : onChain.playerBDeposited;
+        const playerA = Array.isArray(onChain) ? onChain[1] : onChain.playerA;
+
+        // If match exists on-chain and is ahead of DB, sync
+        if (playerA && playerA !== '0x0000000000000000000000000000000000000000') {
+          // Accepted on-chain (status >= 1) but DB still says 'created'
+          if (status >= 1 && match.status === 'created') {
+            await api.confirmMatchAccepted(matchId, 'sync');
+          }
+          // Player A deposited on-chain but not in DB
+          if (playerADep && !match.player_a_deposited && match.player_a_address) {
+            await api.confirmDeposit(matchId, match.player_a_address, 'sync');
+          }
+          // Player B deposited on-chain but not in DB
+          if (playerBDep && !match.player_b_deposited && match.player_b_address) {
+            await api.confirmDeposit(matchId, match.player_b_address, 'sync');
+          }
+          syncedRef.current = true;
+          // Refresh match data after sync
+          fetchMatch();
+        }
+      } catch (e) {
+        // On-chain query failed, ignore
+      }
+    };
+
+    syncOnChainState();
+  }, [match, address, matchId, api, fetchMatch]);
+
   const isPlayerA = match && currentUsername === match.player_a_username;
   const isPlayerB = match && currentUsername === match.player_b_username;
   const myDeposited = isPlayerA ? match?.player_a_deposited : match?.player_b_deposited;
@@ -53,6 +100,27 @@ export default function MatchDetailsPage() {
     setIsTxPending(true);
 
     try {
+      // Pre-check: is the match already accepted/deposited on-chain?
+      try {
+        const onChain = await publicClient.readContract({
+          address: ESCROW_CONTRACT_ADDRESS,
+          abi: ESCROW_ABI,
+          functionName: 'matches',
+          args: [matchId as `0x${string}`],
+        }) as any;
+        const status = Array.isArray(onChain) ? Number(onChain[5]) : Number(onChain.status);
+        const playerBDep = Array.isArray(onChain) ? onChain[10] : onChain.playerBDeposited;
+
+        if (status >= 2 && playerBDep) {
+          // Already funded on-chain — just sync DB and go to play
+          await api.confirmMatchAccepted(matchId, 'sync');
+          await api.confirmDeposit(matchId, address!, 'sync');
+          setAction('idle');
+          router.push(`/matches/${encodeURIComponent(matchId)}/play`);
+          return;
+        }
+      } catch {}
+
       const result = await account.sendTransaction([
         {
           to: ESCROW_CONTRACT_ADDRESS,
