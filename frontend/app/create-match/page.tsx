@@ -17,8 +17,8 @@ function CreateMatchContent() {
   const { address, isConnected, isLoading, account } = useJawAccount();
 
   const gameParam = searchParams.get('game') || 'tictactoe';
-  const gameName = gameParam === 'backgammon' ? 'Backgammon' : 'Tic-Tac-Toe';
-  const gameEmoji = gameParam === 'backgammon' ? '🎲' : '#';
+  const gameName = gameParam === 'backgammon' ? 'Backgammon' : gameParam === 'slimesoccer' ? 'Slime Soccer' : 'Tic-Tac-Toe';
+  const gameEmoji = gameParam === 'backgammon' ? '🎲' : gameParam === 'slimesoccer' ? '⚽' : '#';
 
   const [opponentUsername, setOpponentUsername] = useState('');
   const [opponentAddress, setOpponentAddress] = useState<string | null>(null);

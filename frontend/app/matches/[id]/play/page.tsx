@@ -19,6 +19,15 @@ const BackgammonBoard = dynamic(() => import('./components/BackgammonBoard'), {
   ),
 });
 
+const SlimeSoccerBoard = dynamic(() => import('./components/SlimeSoccerBoard'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
+      <div className="animate-spin h-8 w-8 border-4 border-white border-t-transparent rounded-full" />
+    </div>
+  ),
+});
+
 export default function PlayGamePage() {
   const router = useRouter();
   const params = useParams();
@@ -38,12 +47,33 @@ export default function PlayGamePage() {
     setUsername(storedUsername);
   }, [router]);
 
+  const [matchData, setMatchData] = useState<any>(null);
+  const api = useApi();
+
+  useEffect(() => {
+    if (!matchId) return;
+    api.getMatch(matchId).then((res) => {
+      if (res.data) {
+        setMatchData(res.data.match || res.data);
+      }
+    });
+  }, [api, matchId]);
+
   if (!userId) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-white">Loading...</div>
       </div>
     );
+  }
+
+  const gameId = matchData?.game_id || 'tictactoe';
+
+  // Slime soccer has its own WebSocket hook — render directly
+  if (gameId === 'slimesoccer') {
+    const stakeNum = matchData ? Number(formatUnits(BigInt(matchData.stake_amount), 6)) : 0;
+    const tokenSymbol = matchData ? getTokenSymbol(matchData.token_address) : 'USDC';
+    return <SlimeSoccerGameWrapper matchId={matchId} userId={userId} stakeAmount={stakeNum} tokenSymbol={tokenSymbol} />;
   }
 
   return <GameBoard matchId={matchId} userId={userId} username={username} />;
@@ -263,6 +293,116 @@ function GameBoard({ matchId, userId, username }: { matchId: string; userId: str
       )}
 
       {/* CSS animations */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(40px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function SlimeSoccerGameWrapper({ matchId, userId, stakeAmount, tokenSymbol }: { matchId: string; userId: string; stakeAmount: number; tokenSymbol: string }) {
+  const router = useRouter();
+  const { playSound } = useGameSounds();
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [gameEndData, setGameEndData] = useState<any>(null);
+
+  const handleGameEnd = (result: any) => {
+    setGameEndData(result);
+    if (result.winner === userId) {
+      playSound('win');
+    } else if (result.winner) {
+      playSound('loss');
+    }
+    setTimeout(() => setShowOverlay(true), 600);
+  };
+
+  const totalPot = stakeAmount * 2;
+  const fee = totalPot * PLATFORM_FEE;
+  const winnerPayout = totalPot * WINNER_SHARE;
+  const iWon = gameEndData?.winner === userId;
+
+  return (
+    <div className="relative">
+      <SlimeSoccerBoard
+        matchId={matchId}
+        userId={userId}
+        stakeAmount={stakeAmount}
+        tokenSymbol={tokenSymbol}
+        onGameEnd={handleGameEnd}
+      />
+
+      {/* Game Over Overlay */}
+      {gameEndData && showOverlay && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            style={{ animation: 'fadeIn 0.3s ease-out' }}
+          />
+          <div
+            className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{ animation: 'slideUp 0.4s ease-out' }}
+          >
+            <div className={`px-6 pt-8 pb-6 text-center ${
+              iWon
+                ? 'bg-gradient-to-b from-green-500/30 to-gray-900'
+                : gameEndData.result === 'draw'
+                ? 'bg-gradient-to-b from-yellow-500/20 to-gray-900'
+                : 'bg-gradient-to-b from-red-500/20 to-gray-900'
+            }`}>
+              <div className="text-6xl mb-3">
+                {iWon ? '🏆' : gameEndData.result === 'draw' ? '🤝' : '💀'}
+              </div>
+              <h2 className={`text-3xl font-black mb-1 ${
+                iWon ? 'text-green-400' : gameEndData.result === 'draw' ? 'text-yellow-400' : 'text-red-400'
+              }`}>
+                {iWon ? 'YOU WON!' : gameEndData.result === 'draw' ? 'DRAW!' : 'YOU LOST'}
+              </h2>
+              <p className="text-gray-400 text-sm">
+                {iWon ? 'Congratulations, champion!' : gameEndData.result === 'draw' ? 'Stakes refunded' : 'Better luck next time'}
+              </p>
+            </div>
+
+            {stakeAmount > 0 && (
+              <div className="bg-gray-900 px-6 pb-2">
+                <div className={`rounded-xl p-4 ${
+                  iWon
+                    ? 'bg-green-500/10 border border-green-500/30'
+                    : 'bg-red-500/10 border border-red-500/30'
+                }`}>
+                  <div className="text-center">
+                    <p className={`text-4xl font-black ${iWon ? 'text-green-400' : gameEndData.result === 'draw' ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {iWon ? '+' : gameEndData.result === 'draw' ? '' : '-'}{iWon ? winnerPayout.toFixed(2) : gameEndData.result === 'draw' ? stakeAmount.toFixed(2) : stakeAmount.toFixed(2)} {tokenSymbol}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-gray-900 px-6 pt-2 pb-6 flex gap-3">
+              <button
+                onClick={() => router.push('/create-match?game=slimesoccer')}
+                className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-xl font-bold hover:bg-blue-700 transition text-sm"
+              >
+                Play Again
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex-1 bg-gray-700 text-white py-3 px-4 rounded-xl font-bold hover:bg-gray-600 transition text-sm"
+              >
+                Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; }
